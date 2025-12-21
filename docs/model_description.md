@@ -1,4 +1,4 @@
-# LPERFECT – Model Description (Text-Only)
+# Model Description
 **Lagrangian Parallel Environmental Runoff and Flood Evaluation for Computational Terrain**
 
 ---
