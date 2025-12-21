@@ -8,7 +8,7 @@ The output NetCDF includes:
 
 - `rain_rate(time, latitude, longitude)` in **mm h-1**.
 - A `crs` variable with CF grid mapping metadata.
-- `time` in **hours since 1900-01-01 00:00:00 UTC**.
+- `time` in **hours since 1900-01-01 00:00:0.0**.
 - Global attributes describing the source, institution, and history.
 
 ## Requirements

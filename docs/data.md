@@ -1,13 +1,13 @@
 # LPERFECT – Input Data Preparation Guide
 
-This document describes **how to prepare all input datasets** required by **LPERFECT**, in a way that is **fully consistent with the provided NcML specifications**:
+This document describes **how to prepare all input datasets** required by **LPERFECT**, in a way that is **fully consistent with the CDL templates** in `/cdl`:
 
-- `ncml/domain.ncml`
-- `ncml/rain_time_dependent.ncml`
-- `ncml/rain_static.ncml`
-- `ncml/rain_bundle_optional.ncml`
-- `ncml/output_flood_depth.ncml`
-- `ncml/restart_state.ncml`
+- `cdl/domain.cdl`
+- `cdl/rain_time_dependent.cdl`
+- `cdl/rain_static.cdl`
+- `cdl/rain_bundle_optional.cdl`
+- `cdl/output_flood_depth.cdl`
+- `cdl/restart_state.cdl`
 
 LPERFECT **only uses NetCDF inputs** and follows **CF-1.10 conventions** to ensure interoperability, reproducibility, and long-term maintainability.
 
@@ -23,13 +23,13 @@ LPERFECT requires two categories of input data:
 All datasets must:
 - share the **same spatial grid** (same `latitude`, `longitude`, resolution, CRS),
 - be stored as **NetCDF files**,
-- follow the variable names and metadata described in the NcML files.
+- follow the variable names and metadata described in the CDL files.
 
 ---
 
 ## 2. Domain Dataset (`domain.nc`)
 
-**Reference specification:** `ncml/domain.ncml`
+**Reference specification:** `cdl/domain.cdl`
 
 The domain dataset defines the **computational terrain and hydrological structure**.
 
@@ -43,7 +43,7 @@ The following 2D variables (dimensions `latitude, longitude`) are required:
 | Variable | Description | Units |
 |--------|------------|-------|
 | `dem` | Digital Elevation Model | meters |
-| `d8` | D8 flow direction | encoded |
+| `d8` | D8 flow direction (ESRI encoding) | encoded |
 | `cn` | SCS Curve Number | 0–100 |
 
 Optional:
@@ -69,21 +69,19 @@ LPERFECT assumes:
 
 ### 2.3 Coordinate Reference System (CRS)
 
-A **CF-compliant grid mapping variable** is strongly recommended.
+The CDL template requires a **CF grid mapping variable**:
 
-Example:
 ```text
-crs:grid_mapping_name = "transverse_mercator"
-crs:epsg_code = "EPSG:32633"
+crs:grid_mapping_name = "{{grid_mapping_name}}"
+crs:epsg_code = "{{EPSG:xxxx}}"
+crs:semi_major_axis = "{{a}}"
+crs:inverse_flattening = "{{inv_f}}"
 ```
 
-Each spatial variable (`dem`, `cn`, etc.) must reference it via:
+Each spatial variable (`dem`, `d8`, `cn`, `channel_mask`) must reference it via:
 ```text
 grid_mapping = "crs"
 ```
-
-The NcML template includes a `crs` variable with CF grid-mapping attributes. If you omit
-the CRS variable, ensure your tools can still infer the grid geometry.
 
 ### 2.4 DEM Preparation
 
@@ -101,11 +99,11 @@ The D8 raster must be derived from the DEM using tools such as:
 - TauDEM,
 - RichDEM.
 
-Supported encodings:
-- **ESRI**: 1,2,4,8,16,32,64,128
-- **Clockwise**: 0–7
+The CDL template defines **ESRI D8** values:
+- 1,2,4,8,16,32,64,128 with flag meanings `E SE S SW W NW N NE`.
 
-The encoding must match `model.encoding` in `config.json`.
+If you use a different encoding internally, remap it to ESRI before writing the domain
+NetCDF to stay compliant with `cdl/domain.cdl`.
 
 ### 2.6 Curve Number (CN)
 
@@ -126,7 +124,7 @@ LPERFECT supports **multiple rainfall sources**, each provided as a NetCDF file.
 
 ### 3.1 Time-Dependent Rainfall (`rain_time_dependent.nc`)
 
-**Reference specification:** `ncml/rain_time_dependent.ncml`
+**Reference specification:** `cdl/rain_time_dependent.cdl`
 
 Used for:
 - radar nowcasting,
@@ -148,6 +146,9 @@ Used for:
 | `time(time)` | time coordinate | hours since 1900-01-01 00:00:0.0 |
 | `rain_rate(time,latitude,longitude)` | rainfall rate | mm h-1 |
 
+The file must include a `crs` variable with `grid_mapping_name` and `epsg_code`,
+and `rain_rate` must reference it via `grid_mapping = "crs"`.
+
 #### Time Coordinate
 
 The `time` variable must include:
@@ -161,7 +162,7 @@ LPERFECT supports:
 
 ### 3.2 Static Rainfall (`rain_static.nc`)
 
-**Reference specification:** `ncml/rain_static.ncml`
+**Reference specification:** `cdl/rain_static.cdl`
 
 Used for:
 - design storms,
@@ -176,9 +177,13 @@ Required variable:
 
 No time dimension is present.
 
+The file must include a `crs` variable with `grid_mapping_name`, `epsg_code`,
+`semi_major_axis`, and `inverse_flattening`. The `rain_rate` variable should
+reference it via `grid_mapping = "crs"`.
+
 ### 3.3 Optional Multi-Source Bundle (`rain_bundle_optional.nc`)
 
-**Reference specification:** `ncml/rain_bundle_optional.ncml`
+**Reference specification:** `cdl/rain_bundle_optional.cdl`
 
 This optional format packages multiple rainfall sources in a single file using:
 - `radar_rain_rate(time,latitude,longitude)`
@@ -187,6 +192,9 @@ This optional format packages multiple rainfall sources in a single file using:
 
 Each variable uses units of `mm h-1` and shares the same `time`, `latitude`, and
 `longitude` coordinates as the other rainfall inputs.
+
+The bundle also defines a `crs` variable with grid-mapping attributes; each rain
+variable should reference it via `grid_mapping = "crs"`.
 
 ---
 
@@ -205,25 +213,32 @@ LPERFECT does **not** perform reprojection or resampling internally.
 
 ## 5. Output and Restart Datasets (Reference)
 
-While LPERFECT writes outputs automatically, the following NcML files describe the
+While LPERFECT writes outputs automatically, the following CDL files describe the
 expected structure for post-processing and validation.
 
 ### 5.1 Flood Depth Output (`output_flood_depth.nc`)
 
-**Reference specification:** `ncml/output_flood_depth.ncml`
+**Reference specification:** `cdl/output_flood_depth.cdl`
 
 Expected variables:
-- `flood_depth(latitude,longitude)` in meters
-- `risk_index(latitude,longitude)` dimensionless
+- `flood_depth(time,latitude,longitude)` in meters
+- `risk_index(time,latitude,longitude)` dimensionless
+- `time(time)` coordinate in `hours since 1900-01-01 00:00:0.0`
+
+The output includes a `crs` grid-mapping variable (`grid_mapping_name`, `epsg_code`)
+referenced by `flood_depth` and `risk_index`.
 
 ### 5.2 Restart State (`restart_state.nc`)
 
-**Reference specification:** `ncml/restart_state.ncml`
+**Reference specification:** `cdl/restart_state.cdl`
 
 Expected fields include:
 - `P_cum_mm(latitude,longitude)` and `Q_cum_mm(latitude,longitude)`
 - Particle arrays (`particle_r`, `particle_c`, `particle_vol`, `particle_tau`)
 - Scalars like `elapsed_s`, `cum_rain_vol_m3`, `cum_runoff_vol_m3`, `cum_outflow_vol_m3`
+
+The restart dataset also includes `latitude`, `longitude`, and a `crs` variable
+referenced by the gridded fields.
 
 ---
 
@@ -250,9 +265,9 @@ Tools:
 2. Compute D8 flow directions
 3. Derive CN raster
 4. Export all layers to NetCDF
-5. Validate against `domain.ncml`
+5. Validate against `cdl/domain.cdl`
 6. Prepare rainfall NetCDFs
-7. Validate against `rain_time_dependent.ncml`
+7. Validate against `cdl/rain_time_dependent.cdl`
 8. Run LPERFECT
 
 ---
@@ -439,7 +454,7 @@ gdal_translate -of netCDF channel_mask.tif channel_mask.nc
 
 > Depending on GDAL version, variable names may be `Band1` or similar. You will likely rename variables afterward.
 
-#### F2) Rename variables to match `domain.ncml` (NCO)
+#### F2) Rename variables to match `cdl/domain.cdl` (NCO)
 
 ```bash
 ncrename -v Band1,dem dem.nc
@@ -469,7 +484,7 @@ If your NetCDF came with different dim names, rename dimensions/vars with NCO.
 ncdump -h domain.nc | head -n 60
 ```
 
-Then apply `ncml/domain.ncml` as a compliance checklist: make sure the variables and attributes match.
+Then apply `cdl/domain.cdl` as a compliance checklist: make sure the variables and attributes match.
 
 ### 10.7 Step G — Prepare rainfall inputs
 
@@ -510,17 +525,17 @@ ncrename -v Band1,rain_rate rain_static.nc
 ncatted -a units,rain_rate,o,c,"mm h-1" rain_static.nc
 ```
 
-Validate against `ncml/rain_static.ncml`.
+Validate against `cdl/rain_static.cdl`.
 
 ---
 
-## 11. Validation against NcML
+## 11. Validation against CDL
 
-Use `ncdump -h` and compare to the NcML specs:
+Use `ncdump -h` and compare to the CDL specs:
 
-- `ncml/domain.ncml`
-- `ncml/rain_time_dependent.ncml`
-- `ncml/rain_static.ncml`
+- `cdl/domain.cdl`
+- `cdl/rain_time_dependent.cdl`
+- `cdl/rain_static.cdl`
 
 Typical checks:
 

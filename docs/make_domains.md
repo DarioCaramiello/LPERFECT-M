@@ -17,8 +17,10 @@ The output NetCDF contains:
 - `channel_mask` (optional, int): 0/1 mask for channels
 
 All variables use dimensions `(latitude, longitude)` and include CF-style
-coordinate metadata. If the input DEM has a `grid_mapping` attribute, the
-corresponding grid mapping variable is preserved in the output.
+coordinate metadata. For CDL compliance, the output also includes a `crs`
+grid-mapping variable (`grid_mapping_name`, `epsg_code`, `semi_major_axis`,
+`inverse_flattening`) and each spatial variable references it via
+`grid_mapping = "crs"`.
 
 ---
 

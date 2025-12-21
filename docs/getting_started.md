@@ -53,6 +53,10 @@ It must also include 1D coordinate variables:
 - `latitude(latitude)` – latitude coordinate
 - `longitude(longitude)` – longitude coordinate
 
+And a CF grid mapping variable:
+- `crs` with `grid_mapping_name`, `epsg_code`, `semi_major_axis`, and `inverse_flattening`
+- Each spatial variable should include `grid_mapping = "crs"`
+
 > Coordinate names can be remapped via `domain.varmap` in `config.json` if your files
 > use `x/y` or other naming conventions.
 
@@ -95,6 +99,8 @@ LPERFECT-M supports two encodings:
 - `cw0_7` (clockwise 0–7)
 
 Set the corresponding encoding in `config.json`.
+
+> Note: the CDL template in `/cdl/domain.cdl` encodes ESRI D8 values (1,2,4,8,16,32,64,128).
 
 ---
 
@@ -143,9 +149,12 @@ Rainfall NetCDFs can be:
 - Static: `(latitude, longitude)`
 - Time-varying: `(time, latitude, longitude)`
 
-Supported semantics:
-- `intensity_mmph` – rainfall rate (mm/h)
-- `depth_mm_per_step` – rainfall depth per timestep (mm)
+Required variable:
+- `rain_rate` with units **mm h-1**
+
+Time-varying files must define `time(time)` with units `hours since 1900-01-01 00:00:0.0`.
+Rainfall files should include a `crs` grid-mapping variable and a
+`grid_mapping = "crs"` attribute on `rain_rate`.
 
 ---
 
@@ -206,8 +215,9 @@ Rank 0 handles NetCDF I/O in parallel runs.
 ## 8. Outputs
 
 The model produces a NetCDF file containing fields such as:
-- `flood_depth(y, x)`
-- `risk_index(y, x)`
+- `flood_depth(time, latitude, longitude)`
+- `risk_index(time, latitude, longitude)`
+- `time(time)` coordinate (hours since 1900-01-01 00:00:0.0)
 
 These can be visualized using:
 - Python (`xarray`, `matplotlib`)

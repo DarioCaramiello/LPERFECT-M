@@ -136,7 +136,7 @@ Controls where the spatial domain is loaded from and how variables are mapped.
 | `domain.varmap.x` | `x` | Coordinate name for the x/longitude axis. | `"x": "longitude"` |
 | `domain.varmap.y` | `y` | Coordinate name for the y/latitude axis. | `"y": "latitude"` |
 
-> Note: The provided NcML templates use `latitude`/`longitude` coordinate names. If you
+> Note: The provided CDL templates use `latitude`/`longitude` coordinate names. If you
 > follow those templates, set `domain.varmap.x = "longitude"` and
 > `domain.varmap.y = "latitude"` (or rename the coordinates in your NetCDF).
 
@@ -231,7 +231,7 @@ each timestep. Weights do not need to sum to 1, but relative values matter.
 | --- | --- | --- | --- |
 | `kind` | `netcdf` | Source type: `netcdf` or `scalar`. | `"kind": "scalar"` |
 | `weight` | `0.0` | Weight used in the blending sum. | `"weight": 0.3` |
-| `mode` | `intensity_mmph` | Data units: `intensity_mmph` (mm/hour) or `depth_mm_per_step` (mm per model step). | `"mode": "depth_mm_per_step"` |
+| `mode` | `intensity_mmph` | Data units: `intensity_mmph` (mm/hour). CDL-compliant rain files use `rain_rate` with units `mm h-1`. | `"mode": "intensity_mmph"` |
 | `path` | `null` | NetCDF path (required when `kind = netcdf`). | `"path": "radar.nc"` |
 | `var` | `null` | NetCDF variable name (required when `kind = netcdf`). | `"var": "rain_rate"` |
 | `time_var` | `time` | Name of the time coordinate. Used when data is 3D. | `"time_var": "valid_time"` |
