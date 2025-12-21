@@ -18,7 +18,7 @@ LPERFECT requires two categories of input data:
 2. **Rainfall forcing data** (static or time-dependent)
 
 All datasets must:
-- share the **same spatial grid** (same `x`, `y`, resolution, CRS),
+- share the **same spatial grid** (same `latitude`, `longitude`, resolution, CRS),
 - be stored as **NetCDF files**,
 - follow the variable names and metadata described in the NcML files.
 
@@ -32,7 +32,7 @@ The domain dataset defines the **computational terrain and hydrological structur
 
 ### 2.1 Required Variables
 
-The following 2D variables (dimensions `y, x`) are required:
+The following 2D variables (dimensions `latitude, longitude`) are required:
 
 | Variable | Description | Units |
 |--------|------------|-------|
@@ -50,12 +50,12 @@ Optional:
 
 The dataset must define **horizontal coordinates**:
 
-- `x(x)` – projection x coordinate  
-- `y(y)` – projection y coordinate  
+- `latitude(latitude)` – latitude coordinate  
+- `longitude(longitude)` – longitude coordinate  
 
 Attributes:
-- `standard_name`: `projection_x_coordinate` / `projection_y_coordinate`
-- `units`: meters (projected) or degrees (geographic)
+- `description`: `Latitude` / `Longitude`
+- `units`: `degrees_north` / `degrees_east`
 
 LPERFECT assumes:
 - regular grid spacing,
@@ -129,21 +129,22 @@ Used for:
 | Dimension | Meaning |
 |---------|--------|
 | `time` | time steps |
-| `y` | grid rows |
-| `x` | grid columns |
+| `latitude` | grid rows |
+| `longitude` | grid columns |
 
 #### Required Variables
 
 | Variable | Description | Units |
 |--------|------------|-------|
-| `time(time)` | time coordinate | seconds since reference |
-| `rain_rate(time,y,x)` | rainfall rate | mm h⁻¹ |
+| `time(time)` | time coordinate | hours since 1900-01-01 00:00:0.0 |
+| `rain_rate(time,latitude,longitude)` | rainfall rate | mm h⁻¹ |
 
 #### Time Coordinate
 
 The `time` variable must include:
-- `units`: `seconds since YYYY-MM-DD HH:MM:SS`
-- `calendar`: `gregorian`
+- `description`: `Time`
+- `long_name`: `time`
+- `units`: `hours since 1900-01-01 00:00:0.0`
 
 LPERFECT supports:
 - nearest-time selection,
@@ -162,7 +163,7 @@ Required variable:
 
 | Variable | Description | Units |
 |--------|------------|-------|
-| `rain_rate(y,x)` | rainfall rate | mm h⁻¹ |
+| `rain_rate(latitude,longitude)` | rainfall rate | mm h⁻¹ |
 
 No time dimension is present.
 
@@ -172,8 +173,8 @@ No time dimension is present.
 
 All input datasets **must be spatially consistent**:
 
-- same grid shape `(y,x)`,
-- same `x` and `y` coordinate values,
+- same grid shape `(latitude,longitude)`,
+- same `latitude` and `longitude` coordinate values,
 - same CRS,
 - same orientation (no flipped axes).
 
@@ -414,7 +415,7 @@ A common clean approach is:
 1) `cp dem.nc domain.nc`
 2) append others with `ncks -A` as above.
 
-#### F4) Ensure dimensions are `y,x` and create consistent coords (CDO/NCO)
+#### F4) Ensure dimensions are `latitude,longitude` and create consistent coords (CDO/NCO)
 
 If your NetCDF came with different dim names, rename dimensions/vars with NCO.
 (Exact commands vary by file; inspect with `ncdump -h` first.)
@@ -448,7 +449,7 @@ ncrename -v Band1,rain_rate rain_time_dependent.nc
 ncatted -a units,rain_rate,o,c,"mm h-1" rain_time_dependent.nc
 ```
 
-Finally ensure `time(time)` exists and is CF-compliant (`seconds since ...`).
+Finally ensure `time(time)` exists and is compliant (`hours since 1900-01-01 00:00:0.0`).
 
 #### G2) Create a static rainfall file
 
@@ -486,7 +487,7 @@ ncdump -h rain_static.nc | sed -n '1,120p'
 
 Check:
 - variable names match (`dem`, `d8`, `cn`, `rain_rate`),
-- dimensions are correct (`y,x` and optionally `time`),
+- dimensions are correct (`latitude,longitude` and optionally `time`),
 - units are correct (`m`, `mm h-1`, etc.),
 - CRS / grid_mapping is present (recommended).
 

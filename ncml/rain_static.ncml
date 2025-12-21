@@ -3,22 +3,21 @@
   <attribute name="Conventions" value="CF-1.10"/>
   <attribute name="title" value="{{source_name}} static rainfall forcing"/>
 
-  <dimension name="y" length="{{Ny}}"/>
-  <dimension name="x" length="{{Nx}}"/>
+  <dimension name="latitude" length="{{Ny}}"/>
+  <dimension name="longitude" length="{{Nx}}"/>
 
-  <variable name="x" type="double" shape="x">
-    <attribute name="standard_name" value="projection_x_coordinate"/>
-    <attribute name="units" value="{{x_units}}"/>
-    <attribute name="axis" value="X"/>
+  <variable name="latitude" type="float" shape="latitude">
+    <attribute name="description" value="Latitude"/>
+    <attribute name="units" value="degrees_north"/>
   </variable>
 
-  <variable name="y" type="double" shape="y">
-    <attribute name="standard_name" value="projection_y_coordinate"/>
-    <attribute name="units" value="{{y_units}}"/>
-    <attribute name="axis" value="Y"/>
+  <variable name="longitude" type="float" shape="longitude">
+    <attribute name="description" value="Longitude"/>
+    <attribute name="long_name" value="latitude"/>
+    <attribute name="units" value="degrees_east"/>
   </variable>
 
-  <variable name="rain_rate" type="float" shape="y x">
+  <variable name="rain_rate" type="float" shape="latitude longitude">
     <attribute name="standard_name" value="rainfall_rate"/>
     <attribute name="units" value="mm h-1"/>
     <attribute name="_FillValue" value="{{fill_value}}"/>
