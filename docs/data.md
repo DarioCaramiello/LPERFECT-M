@@ -33,6 +33,9 @@ All datasets must:
 
 The domain dataset defines the **computational terrain and hydrological structure**.
 
+For a CLI helper to assemble the domain NetCDF from DEM/CN/D8 inputs, see
+[`docs/make_domains.md`](make_domains.md).
+
 ### 2.1 Required Variables
 
 The following 2D variables (dimensions `latitude, longitude`) are required:
