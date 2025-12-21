@@ -11,12 +11,13 @@ Project website: https://www.hiwefai-project.org
 
 ## Documentation
 
-- [`docs/getting_started.md`](docs/getting_started.md)
-- [`docs/configure.md`](docs/configure.md)
-- [`docs/model_description.md`](docs/model_description.md)
+- A ready-to-go recipe to make the LPERFECT model up and running [`link`](docs/getting_started.md)
+- Detailed information about how to configure the LPERFECT model [`link`](docs/configure.md)
+- Description in depth how the model works [`link`](docs/model_description.md)
+- Some remarks about the LPERFECT parallelization schema for MPI and GPU [`link`](docs/parallelization.md)
 - Detailed guide to preparing **domain** and **rainfall forcing** NetCDF inputs (with GDAL/CDO/NCO examples and Italy-oriented datasets) [link](docs/data.md)
-- [`docs/make_domains.md`](docs/make_domains.md)
-- [`docs/wr_to_rain.md`](docs/wr_to_rain.md)
+- A utility for making the model domain quick and easy [`link`](docs/make_domains.md)
+- A utility for converting a VMI radar image to rain rate stored in a NetCDF file [`link`](docs/wr_to_rain.md)
 
 ## Installation
 
