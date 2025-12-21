@@ -1,62 +1,56 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<netcdf xmlns="http://www.unidata.ucar.edu/namespaces/netcdf/ncml-2.2">
-  <attribute name="Conventions" value="CF-1.10"/>
-  <attribute name="title" value="LPERFECT simulation domain"/>
-  <attribute name="institution" value="{{institution}}"/>
-  <attribute name="source" value="Prepared for LPERFECT (DEM + D8 + CN)"/>
-  <attribute name="history" value="{{ISO-8601 timestamp}}: domain created"/>
-  <attribute name="references" value="Hi-WeFAI / LPERFECT"/>
+netcdf domain {
+:Conventions = "CF-1.10";
+:title = "LPERFECT simulation domain";
+:institution = "{{institution}}";
+:source = "Prepared for LPERFECT (DEM + D8 + CN)";
+:history = "{{ISO-8601 timestamp}}: domain created";
+:references = "Hi-WeFAI / LPERFECT";
 
-  <dimension name="latitude" length="{{Ny}}"/>
-  <dimension name="longitude" length="{{Nx}}"/>
+dimensions:
+  latitude = {{Ny}};
+  longitude = {{Nx}};
 
-  <variable name="latitude" type="float" shape="latitude">
-    <attribute name="description" value="Latitude"/>
-    <attribute name="units" value="degrees_north"/>
-  </variable>
+variables:
+  float latitude(latitude);
+    latitude:description = "Latitude";
+    latitude:units = "degrees_north";
 
-  <variable name="longitude" type="float" shape="longitude">
-    <attribute name="description" value="Longitude"/>
-    <attribute name="long_name" value="latitude"/>
-    <attribute name="units" value="degrees_east"/>
-  </variable>
+  float longitude(longitude);
+    longitude:description = "Longitude";
+    longitude:long_name = "latitude";
+    longitude:units = "degrees_east";
 
-  <variable name="crs" type="int">
-    <attribute name="grid_mapping_name" value="{{grid_mapping_name}}"/>
-    <attribute name="epsg_code" value="{{EPSG:xxxx}}"/>
-    <attribute name="semi_major_axis" value="{{a}}"/>
-    <attribute name="inverse_flattening" value="{{inv_f}}"/>
-  </variable>
+  int crs;
+    crs:grid_mapping_name = "{{grid_mapping_name}}";
+    crs:epsg_code = "{{EPSG:xxxx}}";
+    crs:semi_major_axis = "{{a}}";
+    crs:inverse_flattening = "{{inv_f}}";
 
-  <variable name="dem" type="double" shape="latitude longitude">
-    <attribute name="standard_name" value="surface_altitude"/>
-    <attribute name="long_name" value="digital_elevation_model"/>
-    <attribute name="units" value="m"/>
-    <attribute name="_FillValue" value="{{fill_value}}"/>
-    <attribute name="grid_mapping" value="crs"/>
-  </variable>
+  double dem(latitude, longitude);
+    dem:standard_name = "surface_altitude";
+    dem:long_name = "digital_elevation_model";
+    dem:units = "m";
+    dem:_FillValue = {{fill_value}};
+    dem:grid_mapping = "crs";
 
-  <variable name="d8" type="int" shape="latitude longitude">
-    <attribute name="long_name" value="D8_flow_direction"/>
-    <attribute name="flag_values" value="1 2 4 8 16 32 64 128"/>
-    <attribute name="flag_meanings" value="E SE S SW W NW N NE"/>
-    <attribute name="comment" value="ESRI D8 encoding (see LPERFECT model.encoding)."/>
-    <attribute name="_FillValue" value="{{d8_fill}}"/>
-  </variable>
+  int d8(latitude, longitude);
+    d8:long_name = "D8_flow_direction";
+    d8:flag_values = 1, 2, 4, 8, 16, 32, 64, 128;
+    d8:flag_meanings = "E SE S SW W NW N NE";
+    d8:comment = "ESRI D8 encoding (see LPERFECT model.encoding).";
+    d8:_FillValue = {{d8_fill}};
 
-  <variable name="cn" type="double" shape="latitude longitude">
-    <attribute name="long_name" value="SCS_curve_number"/>
-    <attribute name="units" value="1"/>
-    <attribute name="valid_min" value="0.0"/>
-    <attribute name="valid_max" value="100.0"/>
-    <attribute name="_FillValue" value="{{cn_fill}}"/>
-  </variable>
+  double cn(latitude, longitude);
+    cn:long_name = "SCS_curve_number";
+    cn:units = "1";
+    cn:valid_min = 0.0;
+    cn:valid_max = 100.0;
+    cn:_FillValue = {{cn_fill}};
 
-  <variable name="channel_mask" type="byte" shape="latitude longitude">
-    <attribute name="long_name" value="channel_mask"/>
-    <attribute name="units" value="1"/>
-    <attribute name="flag_values" value="0 1"/>
-    <attribute name="flag_meanings" value="no_channel channel"/>
-    <attribute name="_FillValue" value="{{mask_fill}}"/>
-  </variable>
-</netcdf>
+  byte channel_mask(latitude, longitude);
+    channel_mask:long_name = "channel_mask";
+    channel_mask:units = "1";
+    channel_mask:flag_values = 0, 1;
+    channel_mask:flag_meanings = "no_channel channel";
+    channel_mask:_FillValue = {{mask_fill}};
+}

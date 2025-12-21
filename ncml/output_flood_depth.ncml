@@ -1,43 +1,39 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<netcdf xmlns="http://www.unidata.ucar.edu/namespaces/netcdf/ncml-2.2">
-  <attribute name="Conventions" value="CF-1.10"/>
-  <attribute name="title" value="LPERFECT flood depth + hydrogeological risk index"/>
-  <attribute name="institution" value="{{institution}}"/>
-  <attribute name="source" value="LPERFECT"/>
-  <attribute name="history" value="{{ISO-8601 timestamp}}: results written by LPERFECT"/>
-  <attribute name="lperfect_config_json" value="{{minified_config_json}}"/>
+netcdf output_flood_depth {
+:Conventions = "CF-1.10";
+:title = "LPERFECT flood depth + hydrogeological risk index";
+:institution = "{{institution}}";
+:source = "LPERFECT";
+:history = "{{ISO-8601 timestamp}}: results written by LPERFECT";
+:lperfect_config_json = "{{minified_config_json}}";
 
-  <dimension name="latitude" length="{{Ny}}"/>
-  <dimension name="longitude" length="{{Nx}}"/>
+dimensions:
+  latitude = {{Ny}};
+  longitude = {{Nx}};
 
-  <variable name="latitude" type="float" shape="latitude">
-    <attribute name="description" value="Latitude"/>
-    <attribute name="units" value="degrees_north"/>
-  </variable>
+variables:
+  float latitude(latitude);
+    latitude:description = "Latitude";
+    latitude:units = "degrees_north";
 
-  <variable name="longitude" type="float" shape="longitude">
-    <attribute name="description" value="Longitude"/>
-    <attribute name="long_name" value="latitude"/>
-    <attribute name="units" value="degrees_east"/>
-  </variable>
+  float longitude(longitude);
+    longitude:description = "Longitude";
+    longitude:long_name = "latitude";
+    longitude:units = "degrees_east";
 
-  <variable name="crs" type="int">
-    <attribute name="grid_mapping_name" value="{{grid_mapping_name}}"/>
-    <attribute name="epsg_code" value="{{EPSG:xxxx}}"/>
-  </variable>
+  int crs;
+    crs:grid_mapping_name = "{{grid_mapping_name}}";
+    crs:epsg_code = "{{EPSG:xxxx}}";
 
-  <variable name="flood_depth" type="float" shape="latitude longitude">
-    <attribute name="standard_name" value="water_depth"/>
-    <attribute name="long_name" value="flooded_water_depth"/>
-    <attribute name="units" value="m"/>
-    <attribute name="grid_mapping" value="crs"/>
-    <attribute name="_FillValue" value="{{fill_value}}"/>
-  </variable>
+  float flood_depth(latitude, longitude);
+    flood_depth:standard_name = "water_depth";
+    flood_depth:long_name = "flooded_water_depth";
+    flood_depth:units = "m";
+    flood_depth:grid_mapping = "crs";
+    flood_depth:_FillValue = {{fill_value}};
 
-  <variable name="risk_index" type="float" shape="latitude longitude">
-    <attribute name="long_name" value="hydrogeological_risk_index"/>
-    <attribute name="units" value="1"/>
-    <attribute name="grid_mapping" value="crs"/>
-    <attribute name="_FillValue" value="{{fill_value}}"/>
-  </variable>
-</netcdf>
+  float risk_index(latitude, longitude);
+    risk_index:long_name = "hydrogeological_risk_index";
+    risk_index:units = "1";
+    risk_index:grid_mapping = "crs";
+    risk_index:_FillValue = {{fill_value}};
+}

@@ -1,42 +1,38 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<netcdf xmlns="http://www.unidata.ucar.edu/namespaces/netcdf/ncml-2.2">
-  <attribute name="Conventions" value="CF-1.10"/>
-  <attribute name="title" value="{{source_name}} rainfall forcing"/>
-  <attribute name="institution" value="{{institution}}"/>
-  <attribute name="source" value="{{radar|stations|nwp}}"/>
-  <attribute name="history" value="{{ISO-8601 timestamp}}: produced/ingested"/>
+netcdf rain_time_dependent {
+:Conventions = "CF-1.10";
+:title = "{{source_name}} rainfall forcing";
+:institution = "{{institution}}";
+:source = "{{radar|stations|nwp}}";
+:history = "{{ISO-8601 timestamp}}: produced/ingested";
 
-  <dimension name="time" length="{{Nt}}"/>
-  <dimension name="latitude" length="{{Ny}}"/>
-  <dimension name="longitude" length="{{Nx}}"/>
+dimensions:
+  time = {{Nt}};
+  latitude = {{Ny}};
+  longitude = {{Nx}};
 
-  <variable name="time" type="int" shape="time">
-    <attribute name="description" value="Time"/>
-    <attribute name="long_name" value="time"/>
-    <attribute name="units" value="hours since 1900-01-01 00:00:0.0"/>
-  </variable>
+variables:
+  int time(time);
+    time:description = "Time";
+    time:long_name = "time";
+    time:units = "hours since 1900-01-01 00:00:0.0";
 
-  <variable name="latitude" type="float" shape="latitude">
-    <attribute name="description" value="Latitude"/>
-    <attribute name="units" value="degrees_north"/>
-  </variable>
+  float latitude(latitude);
+    latitude:description = "Latitude";
+    latitude:units = "degrees_north";
 
-  <variable name="longitude" type="float" shape="longitude">
-    <attribute name="description" value="Longitude"/>
-    <attribute name="long_name" value="latitude"/>
-    <attribute name="units" value="degrees_east"/>
-  </variable>
+  float longitude(longitude);
+    longitude:description = "Longitude";
+    longitude:long_name = "latitude";
+    longitude:units = "degrees_east";
 
-  <variable name="crs" type="int">
-    <attribute name="grid_mapping_name" value="{{grid_mapping_name}}"/>
-    <attribute name="epsg_code" value="{{EPSG:xxxx}}"/>
-  </variable>
+  int crs;
+    crs:grid_mapping_name = "{{grid_mapping_name}}";
+    crs:epsg_code = "{{EPSG:xxxx}}";
 
-  <variable name="rain_rate" type="float" shape="time latitude longitude">
-    <attribute name="long_name" value="rainfall_rate"/>
-    <attribute name="standard_name" value="rainfall_rate"/>
-    <attribute name="units" value="mm h-1"/>
-    <attribute name="grid_mapping" value="crs"/>
-    <attribute name="_FillValue" value="{{fill_value}}"/>
-  </variable>
-</netcdf>
+  float rain_rate(time, latitude, longitude);
+    rain_rate:long_name = "rainfall_rate";
+    rain_rate:standard_name = "rainfall_rate";
+    rain_rate:units = "mm h-1";
+    rain_rate:grid_mapping = "crs";
+    rain_rate:_FillValue = {{fill_value}};
+}
