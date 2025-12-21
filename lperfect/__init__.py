@@ -8,4 +8,4 @@ The top-level executable is `main.py` (in the project root).
 """
 
 # Expose a version string for provenance (optional, but convenient).
-__version__ = "1.0.0"
+__version__ = "1.0.0"  # set __version__
