@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+import importlib.util
 from typing import Iterable, Optional
 
 import numpy as np
@@ -91,11 +92,22 @@ def _apply_resolution(da: xr.DataArray, grid: GridSpec, res: Optional[Iterable[f
     y_asc = grid.y[0] < grid.y[-1]
     new_x = _build_axis(xmin, xmax, dx, x_asc)
     new_y = _build_axis(ymin, ymax, dy, y_asc)
-    return da.interp({grid.x_name: new_x, grid.y_name: new_y}, method=method)
+    return _interp_da(da, {grid.x_name: new_x, grid.y_name: new_y}, method=method)
 
 
 def _regrid_to_target(da: xr.DataArray, target: GridSpec, method: str) -> xr.DataArray:
-    return da.interp({target.x_name: target.x, target.y_name: target.y}, method=method)
+    return _interp_da(da, {target.x_name: target.x, target.y_name: target.y}, method=method)
+
+
+def _interp_da(da: xr.DataArray, coords: dict[str, np.ndarray], method: str) -> xr.DataArray:
+    if method == "nearest":
+        return da.sel(coords, method="nearest")
+    if importlib.util.find_spec("scipy") is None:
+        raise ImportError(
+            "scipy is required for linear interpolation. "
+            "Install scipy or avoid --resolution/linear interpolation."
+        )
+    return da.interp(coords, method=method)
 
 
 def _load_var(path: str, var_name: str, x_name: str, y_name: str) -> tuple[xr.DataArray, xr.Dataset]:
