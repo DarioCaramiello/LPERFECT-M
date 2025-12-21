@@ -2,24 +2,25 @@
 """Create a domain NetCDF from DEM/CN/D8/river mask inputs."""
 from __future__ import annotations
 
-import argparse
-from dataclasses import dataclass
-import importlib.util
-from typing import Iterable, Optional
+import argparse  # Parse command-line arguments for the CLI.
+from dataclasses import dataclass  # Provide a simple data container for grid metadata.
+import importlib.util  # Detect optional dependencies at runtime.
+from typing import Iterable, Optional  # Define type hints for optional iterables.
 
-import numpy as np
-import xarray as xr
+import numpy as np  # Numerical arrays and math utilities.
+from tqdm import tqdm  # Progress bar for long-running workflows.
+import xarray as xr  # Dataset and DataArray abstractions for NetCDF.
 
 
 @dataclass
 class GridSpec:
-    x_name: str
-    y_name: str
-    x: np.ndarray
-    y: np.ndarray
+    x_name: str  # Name of the x-coordinate dimension.
+    y_name: str  # Name of the y-coordinate dimension.
+    x: np.ndarray  # 1D coordinate array for x.
+    y: np.ndarray  # 1D coordinate array for y.
 
 
-D8_CODES = np.array([1, 2, 4, 8, 16, 32, 64, 128], dtype=np.int32)
+D8_CODES = np.array([1, 2, 4, 8, 16, 32, 64, 128], dtype=np.int32)  # ESRI D8 codes.
 D8_DIRS = [
     (0, 1),    # E
     (1, 1),    # SE
@@ -33,41 +34,53 @@ D8_DIRS = [
 
 
 def _normalize_da(da: xr.DataArray, x_name: str, y_name: str) -> xr.DataArray:
+    # Ensure the variable is 2D so downstream math behaves as expected.
     if len(da.dims) != 2:
         raise ValueError(f"Expected 2D variable; got dims={da.dims}")
+    # Rename dimensions to the expected x/y names if needed.
     if da.dims != (y_name, x_name):
         da = da.rename({da.dims[0]: y_name, da.dims[1]: x_name})
+    # Return the normalized DataArray to the caller.
     return da
 
 
 def _slice_for_bbox(coord: np.ndarray, minv: float, maxv: float) -> slice:
+    # Detect whether the coordinate array increases or decreases.
     ascending = coord[0] < coord[-1]
+    # Build a slice that respects axis direction.
     if ascending:
         return slice(minv, maxv)
     return slice(maxv, minv)
 
 
 def _build_axis(minv: float, maxv: float, step: float, ascending: bool) -> np.ndarray:
+    # Guard against invalid resolution values early.
     if step <= 0:
         raise ValueError("Resolution must be positive")
-    step = float(step)
+    step = float(step)  # Normalize step to a float for numpy arange.
+    # Flip the sign if the axis should be descending.
     if not ascending:
         step = -step
-    start = minv if ascending else maxv
-    end = maxv if ascending else minv
+    start = minv if ascending else maxv  # Pick the correct start bound.
+    end = maxv if ascending else minv  # Pick the correct end bound.
+    # Include the last cell by extending the end slightly.
     return np.arange(start, end + step * 0.5, step)
 
 
 def _grid_from_da(da: xr.DataArray, x_name: str, y_name: str) -> GridSpec:
+    # Extract coordinate arrays into numpy for downstream operations.
     x = np.asarray(da[x_name].values)
     y = np.asarray(da[y_name].values)
+    # Return a GridSpec for consistent grid metadata handling.
     return GridSpec(x_name=x_name, y_name=y_name, x=x, y=y)
 
 
 def _apply_bbox(da: xr.DataArray, grid: GridSpec, bbox: Optional[Iterable[float]]) -> xr.DataArray:
+    # Short-circuit if no bounding box was requested.
     if bbox is None:
         return da
-    xmin, ymin, xmax, ymax = bbox
+    xmin, ymin, xmax, ymax = bbox  # Unpack the bounding box values.
+    # Select the subset of the domain inside the bounding box.
     return da.sel(
         {
             grid.x_name: _slice_for_bbox(grid.x, xmin, xmax),
@@ -77,86 +90,102 @@ def _apply_bbox(da: xr.DataArray, grid: GridSpec, bbox: Optional[Iterable[float]
 
 
 def _apply_resolution(da: xr.DataArray, grid: GridSpec, res: Optional[Iterable[float]], method: str) -> xr.DataArray:
+    # Skip resampling if no target resolution was provided.
     if res is None:
         return da
-    res_vals = list(res)
+    res_vals = list(res)  # Convert iterable to list for length checks.
+    # Allow a single value to apply to both x and y axes.
     if len(res_vals) == 1:
         dx = dy = res_vals[0]
+    # Allow two values for explicit dx/dy control.
     elif len(res_vals) == 2:
         dx, dy = res_vals
     else:
         raise ValueError("Resolution expects 1 or 2 values")
+    # Determine bounds of the original grid.
     xmin, xmax = float(np.min(grid.x)), float(np.max(grid.x))
     ymin, ymax = float(np.min(grid.y)), float(np.max(grid.y))
-    x_asc = grid.x[0] < grid.x[-1]
-    y_asc = grid.y[0] < grid.y[-1]
+    x_asc = grid.x[0] < grid.x[-1]  # Check axis orientation for x.
+    y_asc = grid.y[0] < grid.y[-1]  # Check axis orientation for y.
+    # Build the new coordinate axes with the desired spacing.
     new_x = _build_axis(xmin, xmax, dx, x_asc)
     new_y = _build_axis(ymin, ymax, dy, y_asc)
+    # Interpolate the data onto the new grid.
     return _interp_da(da, {grid.x_name: new_x, grid.y_name: new_y}, method=method)
 
 
 def _regrid_to_target(da: xr.DataArray, target: GridSpec, method: str) -> xr.DataArray:
+    # Interpolate onto the target grid coordinates.
     return _interp_da(da, {target.x_name: target.x, target.y_name: target.y}, method=method)
 
 
 def _interp_da(da: xr.DataArray, coords: dict[str, np.ndarray], method: str) -> xr.DataArray:
+    # Use xarray's nearest-neighbor selection if requested.
     if method == "nearest":
         return da.sel(coords, method="nearest")
+    # For linear interpolation we need scipy available.
     if importlib.util.find_spec("scipy") is None:
         raise ImportError(
             "scipy is required for linear interpolation. "
             "Install scipy or avoid --resolution/linear interpolation."
         )
+    # Delegate to xarray's interpolation utility.
     return da.interp(coords, method=method)
 
 
 def _load_var(path: str, var_name: str, x_name: str, y_name: str) -> tuple[xr.DataArray, xr.Dataset]:
-    raster_exts = (".tif", ".tiff", ".geotiff", ".gtiff")
+    raster_exts = (".tif", ".tiff", ".geotiff", ".gtiff")  # Supported raster file extensions.
+    # Branch based on file type to load raster or NetCDF inputs.
     if path.lower().endswith(raster_exts):
         try:
-            import rioxarray as rxr
+            import rioxarray as rxr  # Lazy import to keep raster optional.
         except ImportError as exc:
             raise ImportError(
                 "Reading GeoTIFF inputs requires rioxarray and rasterio. "
                 "Install them or convert the input to NetCDF."
             ) from exc
-        da = rxr.open_rasterio(path)
+        da = rxr.open_rasterio(path)  # Load raster data as a DataArray.
+        # Ensure a single-band raster is selected for use.
         if "band" in da.dims:
             if da.sizes["band"] < 1:
                 raise ValueError(f"No bands found in raster {path}")
             da = da.isel(band=0, drop=True)
-        da = da.rename(var_name)
-        ds = da.to_dataset()
+        da = da.rename(var_name)  # Rename the DataArray to the desired variable name.
+        ds = da.to_dataset()  # Convert to a Dataset for consistent handling.
     else:
-        ds = xr.open_dataset(path)
+        ds = xr.open_dataset(path)  # Load NetCDF (or similar) via xarray.
+    # Validate that the requested variable is present.
     if var_name not in ds:
         raise KeyError(f"Variable '{var_name}' not found in {path}")
+    # Normalize the variable to a consistent 2D layout.
     da = _normalize_da(ds[var_name], x_name=x_name, y_name=y_name)
-    return da, ds
+    return da, ds  # Return both DataArray and its parent Dataset.
 
 
 def _compute_d8(dem: np.ndarray, dx: float, dy: float) -> np.ndarray:
-    dem = dem.astype(np.float64)
-    nrows, ncols = dem.shape
+    dem = dem.astype(np.float64)  # Work in floating-point for slope math.
+    nrows, ncols = dem.shape  # Capture the grid shape.
+    # Pad edges with NaNs so neighbor lookups stay in bounds.
     pad = np.pad(dem, 1, mode="constant", constant_values=np.nan)
-    slopes = []
-    dist_diag = float(np.hypot(dx, dy))
-    dist_card = float(np.mean([abs(dx), abs(dy)]))
+    slopes = []  # Collect slope arrays for each D8 direction.
+    dist_diag = float(np.hypot(dx, dy))  # Diagonal distance between cells.
+    dist_card = float(np.mean([abs(dx), abs(dy)]))  # Cardinal distance between cells.
     distances = [dist_card, dist_diag, dist_card, dist_diag, dist_card, dist_diag, dist_card, dist_diag]
+    # Compute slopes to each neighbor direction.
     for (dr, dc), dist in zip(D8_DIRS, distances):
-        neigh = pad[1 + dr:1 + dr + nrows, 1 + dc:1 + dc + ncols]
-        slope = (dem - neigh) / dist
-        slope = np.where(np.isfinite(dem) & np.isfinite(neigh), slope, -np.inf)
-        slopes.append(slope)
-    slope_stack = np.stack(slopes, axis=0)
-    max_idx = np.argmax(slope_stack, axis=0)
-    max_slope = np.max(slope_stack, axis=0)
-    d8 = np.zeros_like(dem, dtype=np.int32)
-    valid = max_slope > 0
+        neigh = pad[1 + dr:1 + dr + nrows, 1 + dc:1 + dc + ncols]  # Neighbor elevation.
+        slope = (dem - neigh) / dist  # Positive slope means flow toward neighbor.
+        slope = np.where(np.isfinite(dem) & np.isfinite(neigh), slope, -np.inf)  # Mask invalid cells.
+        slopes.append(slope)  # Store slope surface for this direction.
+    slope_stack = np.stack(slopes, axis=0)  # Shape (8, nrows, ncols).
+    max_idx = np.argmax(slope_stack, axis=0)  # Direction index of steepest descent.
+    max_slope = np.max(slope_stack, axis=0)  # Steepest slope value per cell.
+    d8 = np.zeros_like(dem, dtype=np.int32)  # Initialize output with zeros.
+    valid = max_slope > 0  # Only assign flow directions where descent exists.
     for idx, code in enumerate(D8_CODES):
-        mask = valid & (max_idx == idx)
-        d8[mask] = code
-    return d8
+        mask = valid & (max_idx == idx)  # Select cells matching this direction.
+        d8[mask] = code  # Assign the D8 code.
+    return d8  # Return the completed D8 grid.
 
 
 def build_domain(
@@ -174,113 +203,145 @@ def build_domain(
     bbox: Optional[Iterable[float]],
     resolution: Optional[Iterable[float]],
 ) -> None:
-    dem_da, dem_ds = _load_var(dem_path, dem_var, x_name=x_name, y_name=y_name)
-
-    dem_da = _apply_bbox(dem_da, _grid_from_da(dem_da, x_name, y_name), bbox)
-    dem_da = _apply_resolution(dem_da, _grid_from_da(dem_da, x_name, y_name), resolution, method="linear")
-
-    grid = _grid_from_da(dem_da, x_name, y_name)
-    dx = float(np.median(np.abs(np.diff(grid.x))))
-    dy = float(np.median(np.abs(np.diff(grid.y))))
-
-    if d8_path:
-        d8_da, d8_ds = _load_var(d8_path, d8_var, x_name=x_name, y_name=y_name)
-        d8_da = _apply_bbox(d8_da, _grid_from_da(d8_da, x_name, y_name), bbox)
-        d8_da = _regrid_to_target(d8_da, grid, method="nearest")
-        d8 = np.asarray(d8_da.values).astype(np.int32)
-        d8_ds.close()
-    else:
-        d8 = _compute_d8(np.asarray(dem_da.values), dx=dx, dy=dy)
-
-    if cn_path:
-        cn_da, cn_ds = _load_var(cn_path, cn_var, x_name=x_name, y_name=y_name)
-        cn_da = _apply_bbox(cn_da, _grid_from_da(cn_da, x_name, y_name), bbox)
-        cn_da = _regrid_to_target(cn_da, grid, method="nearest")
-        cn = np.asarray(cn_da.values).astype(np.float64)
-        cn_ds.close()
-    else:
-        cn = np.zeros_like(dem_da.values, dtype=np.float64)
-
-    channel_mask = None
+    # Count progress steps so the bar reflects optional inputs.
+    total_steps = 4  # DEM load, bbox, resolution, grid prep.
+    total_steps += 1  # D8 step (load or compute).
+    total_steps += 1  # CN step (load or default).
     if mask_path:
-        mask_da, mask_ds = _load_var(mask_path, mask_var, x_name=x_name, y_name=y_name)
-        mask_da = _apply_bbox(mask_da, _grid_from_da(mask_da, x_name, y_name), bbox)
-        mask_da = _regrid_to_target(mask_da, grid, method="nearest")
-        channel_mask = (np.asarray(mask_da.values) > 0).astype(np.int8)
-        mask_ds.close()
+        total_steps += 1  # Optional mask step.
+    total_steps += 3  # Dataset assembly, attributes, write to disk.
 
-    ds_out = xr.Dataset()
-    ds_out = ds_out.assign_coords(
-        {
-            x_name: xr.DataArray(grid.x, dims=(x_name,)),
-            y_name: xr.DataArray(grid.y, dims=(y_name,)),
-        }
-    )
+    with tqdm(total=total_steps, desc="Building domain", unit="step") as progress:
+        progress.set_description("Loading DEM")
+        dem_da, dem_ds = _load_var(dem_path, dem_var, x_name=x_name, y_name=y_name)
+        progress.update(1)
 
-    dem_attrs = dict(dem_da.attrs)
-    ds_out[dem_var] = xr.DataArray(
-        np.asarray(dem_da.values, dtype=np.float64),
-        dims=(y_name, x_name),
-        attrs={
-            "standard_name": dem_attrs.get("standard_name", "surface_altitude"),
-            "long_name": dem_attrs.get("long_name", "digital_elevation_model"),
-            "units": dem_attrs.get("units", "m"),
-        },
-    )
+        progress.set_description("Applying bounding box")
+        dem_da = _apply_bbox(dem_da, _grid_from_da(dem_da, x_name, y_name), bbox)
+        progress.update(1)
 
-    ds_out[d8_var] = xr.DataArray(
-        d8.astype(np.int32),
-        dims=(y_name, x_name),
-        attrs={
-            "long_name": "D8_flow_direction",
-            "flag_values": "1 2 4 8 16 32 64 128",
-            "flag_meanings": "E SE S SW W NW N NE",
-            "comment": "ESRI D8 encoding (see LPERFECT model.encoding).",
-        },
-    )
+        progress.set_description("Applying resolution")
+        dem_da = _apply_resolution(dem_da, _grid_from_da(dem_da, x_name, y_name), resolution, method="linear")
+        progress.update(1)
 
-    ds_out[cn_var] = xr.DataArray(
-        cn.astype(np.float64),
-        dims=(y_name, x_name),
-        attrs={
-            "long_name": "SCS_curve_number",
-            "units": "1",
-            "valid_min": 0.0,
-            "valid_max": 100.0,
-        },
-    )
+        progress.set_description("Preparing grid")
+        grid = _grid_from_da(dem_da, x_name, y_name)
+        dx = float(np.median(np.abs(np.diff(grid.x))))
+        dy = float(np.median(np.abs(np.diff(grid.y))))
+        progress.update(1)
 
-    if channel_mask is not None:
-        ds_out[mask_var] = xr.DataArray(
-            channel_mask,
+        progress.set_description("Preparing D8")
+        if d8_path:
+            d8_da, d8_ds = _load_var(d8_path, d8_var, x_name=x_name, y_name=y_name)
+            d8_da = _apply_bbox(d8_da, _grid_from_da(d8_da, x_name, y_name), bbox)
+            d8_da = _regrid_to_target(d8_da, grid, method="nearest")
+            d8 = np.asarray(d8_da.values).astype(np.int32)
+            d8_ds.close()
+        else:
+            d8 = _compute_d8(np.asarray(dem_da.values), dx=dx, dy=dy)
+        progress.update(1)
+
+        progress.set_description("Preparing CN")
+        if cn_path:
+            cn_da, cn_ds = _load_var(cn_path, cn_var, x_name=x_name, y_name=y_name)
+            cn_da = _apply_bbox(cn_da, _grid_from_da(cn_da, x_name, y_name), bbox)
+            cn_da = _regrid_to_target(cn_da, grid, method="nearest")
+            cn = np.asarray(cn_da.values).astype(np.float64)
+            cn_ds.close()
+        else:
+            cn = np.zeros_like(dem_da.values, dtype=np.float64)
+        progress.update(1)
+
+        channel_mask = None  # Default to no channel mask if none provided.
+        if mask_path:
+            progress.set_description("Preparing channel mask")
+            mask_da, mask_ds = _load_var(mask_path, mask_var, x_name=x_name, y_name=y_name)
+            mask_da = _apply_bbox(mask_da, _grid_from_da(mask_da, x_name, y_name), bbox)
+            mask_da = _regrid_to_target(mask_da, grid, method="nearest")
+            channel_mask = (np.asarray(mask_da.values) > 0).astype(np.int8)
+            mask_ds.close()
+            progress.update(1)
+
+        progress.set_description("Assembling dataset")
+        ds_out = xr.Dataset()  # Start with an empty dataset.
+        ds_out = ds_out.assign_coords(
+            {
+                x_name: xr.DataArray(grid.x, dims=(x_name,)),
+                y_name: xr.DataArray(grid.y, dims=(y_name,)),
+            }
+        )
+        progress.update(1)
+
+        progress.set_description("Writing variables")
+        dem_attrs = dict(dem_da.attrs)  # Copy DEM attributes for reuse.
+        ds_out[dem_var] = xr.DataArray(
+            np.asarray(dem_da.values, dtype=np.float64),
             dims=(y_name, x_name),
             attrs={
-                "long_name": "channel_mask",
-                "units": "1",
-                "flag_values": "0 1",
-                "flag_meanings": "no_channel channel",
+                "standard_name": dem_attrs.get("standard_name", "surface_altitude"),
+                "long_name": dem_attrs.get("long_name", "digital_elevation_model"),
+                "units": dem_attrs.get("units", "m"),
             },
         )
 
-    grid_mapping = dem_attrs.get("grid_mapping")
-    if grid_mapping and grid_mapping in dem_ds:
-        ds_out[grid_mapping] = xr.DataArray(0, attrs=dict(dem_ds[grid_mapping].attrs))
-        ds_out[dem_var].attrs["grid_mapping"] = grid_mapping
+        ds_out[d8_var] = xr.DataArray(
+            d8.astype(np.int32),
+            dims=(y_name, x_name),
+            attrs={
+                "long_name": "D8_flow_direction",
+                "flag_values": "1 2 4 8 16 32 64 128",
+                "flag_meanings": "E SE S SW W NW N NE",
+                "comment": "ESRI D8 encoding (see LPERFECT model.encoding).",
+            },
+        )
 
-    ds_out.attrs.update(
-        {
-            "title": "LPERFECT simulation domain",
-            "source": "Prepared for LPERFECT (DEM + D8 + CN)",
-            "Conventions": "CF-1.10",
-        }
-    )
+        ds_out[cn_var] = xr.DataArray(
+            cn.astype(np.float64),
+            dims=(y_name, x_name),
+            attrs={
+                "long_name": "SCS_curve_number",
+                "units": "1",
+                "valid_min": 0.0,
+                "valid_max": 100.0,
+            },
+        )
 
-    ds_out.to_netcdf(output_path)
-    dem_ds.close()
+        if channel_mask is not None:
+            ds_out[mask_var] = xr.DataArray(
+                channel_mask,
+                dims=(y_name, x_name),
+                attrs={
+                    "long_name": "channel_mask",
+                    "units": "1",
+                    "flag_values": "0 1",
+                    "flag_meanings": "no_channel channel",
+                },
+            )
+        progress.update(1)
+
+        progress.set_description("Finalizing attributes")
+        grid_mapping = dem_attrs.get("grid_mapping")
+        if grid_mapping and grid_mapping in dem_ds:
+            ds_out[grid_mapping] = xr.DataArray(0, attrs=dict(dem_ds[grid_mapping].attrs))
+            ds_out[dem_var].attrs["grid_mapping"] = grid_mapping
+
+        ds_out.attrs.update(
+            {
+                "title": "LPERFECT simulation domain",
+                "source": "Prepared for LPERFECT (DEM + D8 + CN)",
+                "Conventions": "CF-1.10",
+            }
+        )
+        progress.update(1)
+
+        progress.set_description("Writing NetCDF")
+        ds_out.to_netcdf(output_path)
+        dem_ds.close()
+        progress.update(1)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__)  # CLI parser with module docstring.
     parser.add_argument("--dem", required=True, help="Path to DEM NetCDF")
     parser.add_argument("--cn", help="Path to CN NetCDF (optional)")
     parser.add_argument("--d8", help="Path to D8 NetCDF (optional)")
@@ -300,7 +361,7 @@ def main() -> None:
         help="Target resolution (dx [dy]) in degrees or meters",
     )
     parser.add_argument("--output", required=True, help="Output NetCDF path")
-    args = parser.parse_args()
+    args = parser.parse_args()  # Parse CLI arguments.
 
     build_domain(
         dem_path=args.dem,
@@ -320,4 +381,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    main()  # Entry point for CLI execution.
