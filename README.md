@@ -110,17 +110,22 @@ Optional 2D variable:
 Required coordinates (names configurable via `domain.varmap`):
 - `latitude(latitude)` and `longitude(longitude)` with `degrees_north` / `degrees_east` units.
 
-Optional CF grid mapping:
-- If `dem` has attribute `grid_mapping`, and the referenced variable exists, LPERFECT preserves it in outputs.
+Required CF grid mapping (per `/cdl/domain.cdl`):
+- Include a `crs` variable with `grid_mapping_name`, `epsg_code`, `semi_major_axis`, and `inverse_flattening`.
+- Each spatial variable (`dem`, `d8`, `cn`, `channel_mask`) should reference it via `grid_mapping = "crs"`.
 
 ### 5.2 Rain NetCDFs
-Each rain source can be:
-- 2D `(latitude,longitude)` static
-- 3D `(time,latitude,longitude)`
+Each rain source follows the CDL templates in `/cdl`:
+- **Static rainfall**: `rain_rate(latitude,longitude)` with units `mm h-1`
+- **Time-dependent rainfall**: `rain_rate(time,latitude,longitude)` with units `mm h-1`
 
-Modes:
-- `intensity_mmph` (mm/h)
-- `depth_mm_per_step` (mm per timestep)
+Time-dependent files must include a `time(time)` coordinate with:
+- `description = "Time"`
+- `long_name = "time"`
+- `units = "hours since 1900-01-01 00:00:0.0"`
+
+Rainfall files also include a `crs` grid-mapping variable, and `rain_rate` should
+reference it via `grid_mapping = "crs"`.
 
 Time selection:
 - `nearest`: pick the time slice closest to simulation timestamp (`model.start_time` + elapsed)
@@ -170,8 +175,9 @@ MPI restarts:
 ## 8) Outputs
 
 Results NetCDF contains:
-- `flood_depth(latitude,longitude)` in meters
-- `risk_index(latitude,longitude)` unitless (if enabled)
+- `flood_depth(time,latitude,longitude)` in meters
+- `risk_index(time,latitude,longitude)` unitless (if enabled)
+- `time(time)` coordinate (hours since 1900-01-01 00:00:0.0)
 
 Example plot:
 ```python
@@ -179,11 +185,11 @@ import xarray as xr
 import matplotlib.pyplot as plt
 
 ds = xr.open_dataset("flood_depth.nc")
-ds["flood_depth"].plot()
+ds["flood_depth"].isel(time=0).plot()
 plt.title("Flood depth (m)")
 plt.show()
 
-ds["risk_index"].plot()
+ds["risk_index"].isel(time=0).plot()
 plt.title("Risk index")
 plt.show()
 ```
