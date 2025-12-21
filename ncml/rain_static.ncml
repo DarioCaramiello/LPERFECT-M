@@ -1,25 +1,23 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<netcdf xmlns="http://www.unidata.ucar.edu/namespaces/netcdf/ncml-2.2">
-  <attribute name="Conventions" value="CF-1.10"/>
-  <attribute name="title" value="{{source_name}} static rainfall forcing"/>
+netcdf rain_static {
+:Conventions = "CF-1.10";
+:title = "{{source_name}} static rainfall forcing";
 
-  <dimension name="latitude" length="{{Ny}}"/>
-  <dimension name="longitude" length="{{Nx}}"/>
+dimensions:
+  latitude = {{Ny}};
+  longitude = {{Nx}};
 
-  <variable name="latitude" type="float" shape="latitude">
-    <attribute name="description" value="Latitude"/>
-    <attribute name="units" value="degrees_north"/>
-  </variable>
+variables:
+  float latitude(latitude);
+    latitude:description = "Latitude";
+    latitude:units = "degrees_north";
 
-  <variable name="longitude" type="float" shape="longitude">
-    <attribute name="description" value="Longitude"/>
-    <attribute name="long_name" value="latitude"/>
-    <attribute name="units" value="degrees_east"/>
-  </variable>
+  float longitude(longitude);
+    longitude:description = "Longitude";
+    longitude:long_name = "latitude";
+    longitude:units = "degrees_east";
 
-  <variable name="rain_rate" type="float" shape="latitude longitude">
-    <attribute name="standard_name" value="rainfall_rate"/>
-    <attribute name="units" value="mm h-1"/>
-    <attribute name="_FillValue" value="{{fill_value}}"/>
-  </variable>
-</netcdf>
+  float rain_rate(latitude, longitude);
+    rain_rate:standard_name = "rainfall_rate";
+    rain_rate:units = "mm h-1";
+    rain_rate:_FillValue = {{fill_value}};
+}

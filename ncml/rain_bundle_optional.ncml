@@ -1,40 +1,36 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<netcdf xmlns="http://www.unidata.ucar.edu/namespaces/netcdf/ncml-2.2">
-  <attribute name="Conventions" value="CF-1.10"/>
-  <attribute name="title" value="LPERFECT multi-source rainfall bundle"/>
-  <dimension name="time" length="{{Nt}}"/>
-  <dimension name="latitude" length="{{Ny}}"/>
-  <dimension name="longitude" length="{{Nx}}"/>
+netcdf rain_bundle_optional {
+:Conventions = "CF-1.10";
+:title = "LPERFECT multi-source rainfall bundle";
 
-  <variable name="time" type="int" shape="time">
-    <attribute name="description" value="Time"/>
-    <attribute name="long_name" value="time"/>
-    <attribute name="units" value="hours since 1900-01-01 00:00:0.0"/>
-  </variable>
+dimensions:
+  time = {{Nt}};
+  latitude = {{Ny}};
+  longitude = {{Nx}};
 
-  <variable name="latitude" type="float" shape="latitude">
-    <attribute name="description" value="Latitude"/>
-    <attribute name="units" value="degrees_north"/>
-  </variable>
+variables:
+  int time(time);
+    time:description = "Time";
+    time:long_name = "time";
+    time:units = "hours since 1900-01-01 00:00:0.0";
 
-  <variable name="longitude" type="float" shape="longitude">
-    <attribute name="description" value="Longitude"/>
-    <attribute name="long_name" value="latitude"/>
-    <attribute name="units" value="degrees_east"/>
-  </variable>
+  float latitude(latitude);
+    latitude:description = "Latitude";
+    latitude:units = "degrees_north";
 
-  <variable name="radar_rain_rate" type="float" shape="time latitude longitude">
-    <attribute name="standard_name" value="rainfall_rate"/>
-    <attribute name="units" value="mm h-1"/>
-  </variable>
+  float longitude(longitude);
+    longitude:description = "Longitude";
+    longitude:long_name = "latitude";
+    longitude:units = "degrees_east";
 
-  <variable name="station_rain_rate" type="float" shape="time latitude longitude">
-    <attribute name="standard_name" value="rainfall_rate"/>
-    <attribute name="units" value="mm h-1"/>
-  </variable>
+  float radar_rain_rate(time, latitude, longitude);
+    radar_rain_rate:standard_name = "rainfall_rate";
+    radar_rain_rate:units = "mm h-1";
 
-  <variable name="model_rain_rate" type="float" shape="time latitude longitude">
-    <attribute name="standard_name" value="rainfall_rate"/>
-    <attribute name="units" value="mm h-1"/>
-  </variable>
-</netcdf>
+  float station_rain_rate(time, latitude, longitude);
+    station_rain_rate:standard_name = "rainfall_rate";
+    station_rain_rate:units = "mm h-1";
+
+  float model_rain_rate(time, latitude, longitude);
+    model_rain_rate:standard_name = "rainfall_rate";
+    model_rain_rate:units = "mm h-1";
+}
