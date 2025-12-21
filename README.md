@@ -84,7 +84,7 @@ python main.py --config config.json --restart-out restart_state.nc
 ## 5) Input NetCDFs
 
 ### 5.1 Domain NetCDF (`domain.domain_nc`)
-Required 2D variables (dims `y,x`):
+Required 2D variables (dims `latitude,longitude`):
 - `dem` (float): DEM elevation (m). Finite values define the **active domain**.
 - `d8` (int): D8 directions (`model.encoding` = `esri` or `cw0_7`).
 - `cn` (float): Curve Number (0–100). Values outside become 0.
@@ -93,15 +93,15 @@ Optional 2D variable:
 - `channel_mask` (0/1 or bool): Cells treated as channel (faster travel time).
 
 Required coordinates (names configurable via `domain.varmap`):
-- `x(x)` and `y(y)` with CF-style `units` if possible.
+- `latitude(latitude)` and `longitude(longitude)` with `degrees_north` / `degrees_east` units.
 
 Optional CF grid mapping:
 - If `dem` has attribute `grid_mapping`, and the referenced variable exists, LPERFECT preserves it in outputs.
 
 ### 5.2 Rain NetCDFs
 Each rain source can be:
-- 2D `(y,x)` static
-- 3D `(time,y,x)`
+- 2D `(latitude,longitude)` static
+- 3D `(time,latitude,longitude)`
 
 Modes:
 - `intensity_mmph` (mm/h)
@@ -155,8 +155,8 @@ MPI restarts:
 ## 8) Outputs
 
 Results NetCDF contains:
-- `flood_depth(y,x)` in meters
-- `risk_index(y,x)` unitless (if enabled)
+- `flood_depth(latitude,longitude)` in meters
+- `risk_index(latitude,longitude)` unitless (if enabled)
 
 Example plot:
 ```python

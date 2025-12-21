@@ -7,8 +7,8 @@
       "d8": "d8",
       "cn": "cn",
       "channel_mask": "channel_mask",
-      "x": "x",
-      "y": "y"
+      "x": "longitude",
+      "y": "latitude"
     }
   },
   "model": {

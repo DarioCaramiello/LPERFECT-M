@@ -7,21 +7,18 @@
   <attribute name="history" value="{{ISO-8601 timestamp}}: domain created"/>
   <attribute name="references" value="Hi-WeFAI / LPERFECT"/>
 
-  <dimension name="y" length="{{Ny}}"/>
-  <dimension name="x" length="{{Nx}}"/>
+  <dimension name="latitude" length="{{Ny}}"/>
+  <dimension name="longitude" length="{{Nx}}"/>
 
-  <variable name="x" type="double" shape="x">
-    <attribute name="standard_name" value="projection_x_coordinate"/>
-    <attribute name="long_name" value="x coordinate of projection"/>
-    <attribute name="units" value="{{x_units}}"/>
-    <attribute name="axis" value="X"/>
+  <variable name="latitude" type="float" shape="latitude">
+    <attribute name="description" value="Latitude"/>
+    <attribute name="units" value="degrees_north"/>
   </variable>
 
-  <variable name="y" type="double" shape="y">
-    <attribute name="standard_name" value="projection_y_coordinate"/>
-    <attribute name="long_name" value="y coordinate of projection"/>
-    <attribute name="units" value="{{y_units}}"/>
-    <attribute name="axis" value="Y"/>
+  <variable name="longitude" type="float" shape="longitude">
+    <attribute name="description" value="Longitude"/>
+    <attribute name="long_name" value="latitude"/>
+    <attribute name="units" value="degrees_east"/>
   </variable>
 
   <variable name="crs" type="int">
@@ -31,7 +28,7 @@
     <attribute name="inverse_flattening" value="{{inv_f}}"/>
   </variable>
 
-  <variable name="dem" type="double" shape="y x">
+  <variable name="dem" type="double" shape="latitude longitude">
     <attribute name="standard_name" value="surface_altitude"/>
     <attribute name="long_name" value="digital_elevation_model"/>
     <attribute name="units" value="m"/>
@@ -39,7 +36,7 @@
     <attribute name="grid_mapping" value="crs"/>
   </variable>
 
-  <variable name="d8" type="int" shape="y x">
+  <variable name="d8" type="int" shape="latitude longitude">
     <attribute name="long_name" value="D8_flow_direction"/>
     <attribute name="flag_values" value="1 2 4 8 16 32 64 128"/>
     <attribute name="flag_meanings" value="E SE S SW W NW N NE"/>
@@ -47,7 +44,7 @@
     <attribute name="_FillValue" value="{{d8_fill}}"/>
   </variable>
 
-  <variable name="cn" type="double" shape="y x">
+  <variable name="cn" type="double" shape="latitude longitude">
     <attribute name="long_name" value="SCS_curve_number"/>
     <attribute name="units" value="1"/>
     <attribute name="valid_min" value="0.0"/>
@@ -55,7 +52,7 @@
     <attribute name="_FillValue" value="{{cn_fill}}"/>
   </variable>
 
-  <variable name="channel_mask" type="byte" shape="y x">
+  <variable name="channel_mask" type="byte" shape="latitude longitude">
     <attribute name="long_name" value="channel_mask"/>
     <attribute name="units" value="1"/>
     <attribute name="flag_values" value="0 1"/>

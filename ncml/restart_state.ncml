@@ -6,20 +6,19 @@
   <attribute name="history" value="{{ISO-8601 timestamp}}: restart written by LPERFECT"/>
   <attribute name="lperfect_config_json" value="{{minified_config_json}}"/>
 
-  <dimension name="y" length="{{Ny}}"/>
-  <dimension name="x" length="{{Nx}}"/>
+  <dimension name="latitude" length="{{Ny}}"/>
+  <dimension name="longitude" length="{{Nx}}"/>
   <dimension name="particle" length="{{Np}}"/>
 
-  <variable name="x" type="double" shape="x">
-    <attribute name="standard_name" value="projection_x_coordinate"/>
-    <attribute name="units" value="{{x_units}}"/>
-    <attribute name="axis" value="X"/>
+  <variable name="latitude" type="float" shape="latitude">
+    <attribute name="description" value="Latitude"/>
+    <attribute name="units" value="degrees_north"/>
   </variable>
 
-  <variable name="y" type="double" shape="y">
-    <attribute name="standard_name" value="projection_y_coordinate"/>
-    <attribute name="units" value="{{y_units}}"/>
-    <attribute name="axis" value="Y"/>
+  <variable name="longitude" type="float" shape="longitude">
+    <attribute name="description" value="Longitude"/>
+    <attribute name="long_name" value="latitude"/>
+    <attribute name="units" value="degrees_east"/>
   </variable>
 
   <variable name="crs" type="int">
@@ -27,14 +26,14 @@
     <attribute name="epsg_code" value="{{EPSG:xxxx}}"/>
   </variable>
 
-  <variable name="P_cum_mm" type="double" shape="y x">
+  <variable name="P_cum_mm" type="double" shape="latitude longitude">
     <attribute name="long_name" value="cumulative_precipitation"/>
     <attribute name="units" value="mm"/>
     <attribute name="grid_mapping" value="crs"/>
     <attribute name="_FillValue" value="{{fill_value}}"/>
   </variable>
 
-  <variable name="Q_cum_mm" type="double" shape="y x">
+  <variable name="Q_cum_mm" type="double" shape="latitude longitude">
     <attribute name="long_name" value="cumulative_runoff_depth"/>
     <attribute name="units" value="mm"/>
     <attribute name="grid_mapping" value="crs"/>
