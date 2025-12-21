@@ -1,4 +1,4 @@
-# `wr_to_rain.py`: Weather radar VMI GeoTIFF to rainfall NetCDF
+# Weather radar VMI GeoTIFF to rainfall NetCDF
 
 `utils/wr_to_rain.py` converts a single-band weather radar VMI GeoTIFF (reflectivity in dBZ) into a CF-compliant rainfall NetCDF file that can be used as a rain forcing input for LPERFECT. The converter normalizes raster dimensions, applies a Z–R relationship to compute rain rates, attaches CF metadata, and writes a `rain_rate` variable with a time axis.
 
