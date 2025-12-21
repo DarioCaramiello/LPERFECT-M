@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<netcdf xmlns="http://www.unidata.ucar.edu/namespaces/netcdf/ncml-2.2">
+  <attribute name="Conventions" value="CF-1.10"/>
+  <attribute name="title" value="LPERFECT restart"/>
+  <attribute name="source" value="LPERFECT"/>
+  <attribute name="history" value="{{ISO-8601 timestamp}}: restart written by LPERFECT"/>
+  <attribute name="lperfect_config_json" value="{{minified_config_json}}"/>
+
+  <dimension name="y" length="{{Ny}}"/>
+  <dimension name="x" length="{{Nx}}"/>
+  <dimension name="particle" length="{{Np}}"/>
+
+  <variable name="x" type="double" shape="x">
+    <attribute name="standard_name" value="projection_x_coordinate"/>
+    <attribute name="units" value="{{x_units}}"/>
+    <attribute name="axis" value="X"/>
+  </variable>
+
+  <variable name="y" type="double" shape="y">
+    <attribute name="standard_name" value="projection_y_coordinate"/>
+    <attribute name="units" value="{{y_units}}"/>
+    <attribute name="axis" value="Y"/>
+  </variable>
+
+  <variable name="crs" type="int">
+    <attribute name="grid_mapping_name" value="{{grid_mapping_name}}"/>
+    <attribute name="epsg_code" value="{{EPSG:xxxx}}"/>
+  </variable>
+
+  <variable name="P_cum_mm" type="double" shape="y x">
+    <attribute name="long_name" value="cumulative_precipitation"/>
+    <attribute name="units" value="mm"/>
+    <attribute name="grid_mapping" value="crs"/>
+    <attribute name="_FillValue" value="{{fill_value}}"/>
+  </variable>
+
+  <variable name="Q_cum_mm" type="double" shape="y x">
+    <attribute name="long_name" value="cumulative_runoff_depth"/>
+    <attribute name="units" value="mm"/>
+    <attribute name="grid_mapping" value="crs"/>
+    <attribute name="_FillValue" value="{{fill_value}}"/>
+  </variable>
+
+  <variable name="particle_r" type="int" shape="particle">
+    <attribute name="long_name" value="particle_row_index"/>
+    <attribute name="units" value="1"/>
+  </variable>
+
+  <variable name="particle_c" type="int" shape="particle">
+    <attribute name="long_name" value="particle_column_index"/>
+    <attribute name="units" value="1"/>
+  </variable>
+
+  <variable name="particle_vol" type="double" shape="particle">
+    <attribute name="long_name" value="particle_volume"/>
+    <attribute name="units" value="m3"/>
+  </variable>
+
+  <variable name="particle_tau" type="double" shape="particle">
+    <attribute name="long_name" value="particle_travel_time_counter"/>
+    <attribute name="units" value="s"/>
+  </variable>
+
+  <variable name="elapsed_s" type="double">
+    <attribute name="long_name" value="elapsed_simulation_time"/>
+    <attribute name="units" value="s"/>
+  </variable>
+
+  <variable name="cum_rain_vol_m3" type="double">
+    <attribute name="long_name" value="cumulative_rain_volume"/>
+    <attribute name="units" value="m3"/>
+  </variable>
+
+  <variable name="cum_runoff_vol_m3" type="double">
+    <attribute name="long_name" value="cumulative_generated_runoff_volume"/>
+    <attribute name="units" value="m3"/>
+  </variable>
+
+  <variable name="cum_outflow_vol_m3" type="double">
+    <attribute name="long_name" value="cumulative_outflow_volume"/>
+    <attribute name="units" value="m3"/>
+  </variable>
+</netcdf>

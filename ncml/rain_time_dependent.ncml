@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<netcdf xmlns="http://www.unidata.ucar.edu/namespaces/netcdf/ncml-2.2">
+  <attribute name="Conventions" value="CF-1.10"/>
+  <attribute name="title" value="{{source_name}} rainfall forcing"/>
+  <attribute name="institution" value="{{institution}}"/>
+  <attribute name="source" value="{{radar|stations|nwp}}"/>
+  <attribute name="history" value="{{ISO-8601 timestamp}}: produced/ingested"/>
+
+  <dimension name="time" length="{{Nt}}"/>
+  <dimension name="y" length="{{Ny}}"/>
+  <dimension name="x" length="{{Nx}}"/>
+
+  <variable name="time" type="double" shape="time">
+    <attribute name="standard_name" value="time"/>
+    <attribute name="long_name" value="time"/>
+    <attribute name="units" value="seconds since {{reference_datetime_UTC}}"/>
+    <attribute name="calendar" value="gregorian"/>
+  </variable>
+
+  <variable name="x" type="double" shape="x">
+    <attribute name="standard_name" value="projection_x_coordinate"/>
+    <attribute name="units" value="{{x_units}}"/>
+    <attribute name="axis" value="X"/>
+  </variable>
+
+  <variable name="y" type="double" shape="y">
+    <attribute name="standard_name" value="projection_y_coordinate"/>
+    <attribute name="units" value="{{y_units}}"/>
+    <attribute name="axis" value="Y"/>
+  </variable>
+
+  <variable name="crs" type="int">
+    <attribute name="grid_mapping_name" value="{{grid_mapping_name}}"/>
+    <attribute name="epsg_code" value="{{EPSG:xxxx}}"/>
+  </variable>
+
+  <variable name="rain_rate" type="float" shape="time y x">
+    <attribute name="long_name" value="rainfall_rate"/>
+    <attribute name="standard_name" value="rainfall_rate"/>
+    <attribute name="units" value="mm h-1"/>
+    <attribute name="grid_mapping" value="crs"/>
+    <attribute name="_FillValue" value="{{fill_value}}"/>
+  </variable>
+</netcdf>
