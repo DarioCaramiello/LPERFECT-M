@@ -15,30 +15,44 @@ All real logic lives in the `lperfect/` package.
 # Import logging (for module-level logger).
 import logging
 
-# Import config helpers.
-from lperfect.config import default_config, load_json, deep_update
+# Import stdlib helpers.
+import importlib.util
+import sys
 
-# Import CLI parser.
-from lperfect.cli import parse_args
 
-# Import logging configuration.
-from lperfect.logging_utils import setup_logging
-
-# Import MPI utilities.
-from lperfect.mpi_utils import get_comm
-
-# Import domain I/O.
-from lperfect.domain import read_domain_netcdf_rank0, bcast_domain
-
-# Import simulation driver.
-from lperfect.simulation import run_simulation
-
-# Import rain cache close.
-from lperfect.rain import xr_close_cache
+def _require_numpy() -> None:
+    """Validate that NumPy is available before importing LPERFECT modules."""
+    if importlib.util.find_spec("numpy") is None:
+        raise ModuleNotFoundError(
+            "NumPy is required to run LPERFECT. Activate your virtual environment "
+            f"or install it with '{sys.executable} -m pip install numpy'."
+        )
 
 
 def main() -> None:
     """Program entry point."""
+    _require_numpy()
+
+    # Import config helpers.
+    from lperfect.config import default_config, load_json, deep_update
+
+    # Import CLI parser.
+    from lperfect.cli import parse_args
+
+    # Import logging configuration.
+    from lperfect.logging_utils import setup_logging
+
+    # Import MPI utilities.
+    from lperfect.mpi_utils import get_comm
+
+    # Import domain I/O.
+    from lperfect.domain import read_domain_netcdf_rank0, bcast_domain
+
+    # Import simulation driver.
+    from lperfect.simulation import run_simulation
+
+    # Import rain cache close.
+    from lperfect.rain import xr_close_cache
     # Initialize MPI or fall back to a serial communicator.
     comm, rank, size = get_comm()
 
