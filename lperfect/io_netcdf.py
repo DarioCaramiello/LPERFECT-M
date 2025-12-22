@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """NetCDF I/O for outputs and restart state (rank0)."""  # execute statement
 
+# NOTE: Rain NetCDF inputs follow cdl/rain_time_dependent.cdl (CF-1.10).
+
 # Import JSON for embedding config as provenance attribute.
 import json  # import json
 
@@ -17,13 +19,16 @@ import numpy as np  # import numpy as np
 import xarray as xr  # import xarray as xr
 
 # Import local time helper.
-from .time_utils import utc_now_iso  # import .time_utils import utc_now_iso
+from .time_utils import datetime_to_hours_since_1900, utc_now_iso  # import .time_utils import datetime_to_hours_since_1900, utc_now_iso
+
+# Import CF schema constants.
+from .cf_schema import CF_CONVENTIONS, RAIN_TIME_UNITS  # import .cf_schema import CF_CONVENTIONS, RAIN_TIME_UNITS
 
 # Import local Domain and Particles.
 from .domain import Domain  # import .domain import Domain
 from .particles import Particles  # import .particles import Particles
 
-TIME_UNITS = "hours since 1900-01-01 00:00:0.0"  # execute statement
+TIME_UNITS = RAIN_TIME_UNITS  # execute statement
 
 
 def _parse_iso_datetime(value: str | None) -> datetime:  # define function _parse_iso_datetime
@@ -37,13 +42,6 @@ def _parse_iso_datetime(value: str | None) -> datetime:  # define function _pars
     if dt.tzinfo is None:  # check condition dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)  # set dt
     return dt.astimezone(timezone.utc)  # return dt.astimezone(timezone.utc)
-
-
-def _time_to_hours_since_1900(dt: datetime) -> int:  # define function _time_to_hours_since_1900
-    """Convert datetime to integer hours since 1900-01-01 UTC."""  # execute statement
-    base = datetime(1900, 1, 1, tzinfo=timezone.utc)  # set base
-    hours = (dt - base).total_seconds() / 3600.0  # set hours
-    return int(round(hours))  # return int(round(hours))
 
 
 def _coord_attrs(name: str) -> Dict[str, str]:  # define function _coord_attrs
@@ -62,7 +60,7 @@ def write_results_netcdf_rank0(out_path: str, cfg: Dict[str, Any], dom: Domain, 
     out_cfg = cfg.get("output", {})  # set out_cfg
 
     ds = xr.Dataset()  # set ds
-    time_value = _time_to_hours_since_1900(_parse_iso_datetime(cfg.get("model", {}).get("start_time")))  # execute statement
+    time_value = datetime_to_hours_since_1900(_parse_iso_datetime(cfg.get("model", {}).get("start_time")))  # execute statement
     fill_value = float(out_cfg.get("fill_value", -9999.0))  # set fill_value
 
     ds = ds.assign_coords({  # set ds
@@ -102,7 +100,7 @@ def write_results_netcdf_rank0(out_path: str, cfg: Dict[str, Any], dom: Domain, 
     ds.attrs["institution"] = out_cfg.get("institution", "")  # execute statement
     ds.attrs["source"] = "LPERFECT"  # execute statement
     ds.attrs["history"] = f"{utc_now_iso()}: results written by LPERFECT"  # execute statement
-    ds.attrs["Conventions"] = out_cfg.get("Conventions", "CF-1.10")  # execute statement
+    ds.attrs["Conventions"] = out_cfg.get("Conventions", CF_CONVENTIONS)  # execute statement
     ds.attrs["lperfect_config_json"] = json.dumps(cfg, separators=(",", ":"), sort_keys=True)  # execute statement
 
     ds.to_netcdf(out_path, encoding={"flood_depth": {"_FillValue": fill_value}, "risk_index": {"_FillValue": fill_value}})  # execute statement
@@ -151,7 +149,7 @@ def save_restart_netcdf_rank0(out_path: str, cfg: Dict[str, Any], dom: Domain,  
     ds.attrs["title"] = "LPERFECT restart"  # execute statement
     ds.attrs["source"] = "LPERFECT"  # execute statement
     ds.attrs["history"] = f"{utc_now_iso()}: restart written by LPERFECT"  # execute statement
-    ds.attrs["Conventions"] = cfg.get("output", {}).get("Conventions", "CF-1.10")  # execute statement
+    ds.attrs["Conventions"] = cfg.get("output", {}).get("Conventions", CF_CONVENTIONS)  # execute statement
     ds.attrs["lperfect_config_json"] = json.dumps(cfg, separators=(",", ":"), sort_keys=True)  # execute statement
 
     ds.to_netcdf(out_path, encoding={"P_cum_mm": {"_FillValue": fill_value}, "Q_cum_mm": {"_FillValue": fill_value}})  # execute statement

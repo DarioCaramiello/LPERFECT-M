@@ -24,33 +24,26 @@
     "log_every": 10
   },
   "rain": {
+    "schema": {
+      "time_var": "time",
+      "lat_var": "latitude",
+      "lon_var": "longitude",
+      "rain_var": "rain_rate",
+      "crs_var": "crs",
+      "time_units": "hours since 1900-01-01 00:00:0.0",
+      "rate_units": "mm h-1",
+      "require_cf": true,
+      "require_time_dim": true
+    },
     "sources": {
-      "radar": {
+      "rain": {
         "kind": "netcdf",
-        "path": "radar_nowcast.nc",
+        "path": "rain_time_dependent.nc",
         "var": "rain_rate",
         "time_var": "time",
         "select": "nearest",
         "mode": "intensity_mmph",
-        "weight": 0.6
-      },
-      "station": {
-        "kind": "netcdf",
-        "path": "stations_nowcast.nc",
-        "var": "rain_rate",
-        "time_var": "time",
-        "select": "nearest",
-        "mode": "intensity_mmph",
-        "weight": 0.2
-      },
-      "model": {
-        "kind": "netcdf",
-        "path": "wrf_forecast.nc",
-        "var": "rain_rate",
-        "time_var": "time",
-        "select": "nearest",
-        "mode": "intensity_mmph",
-        "weight": 0.2
+        "weight": 1.0
       }
     }
   },

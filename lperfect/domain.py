@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """Domain reading and broadcasting (NetCDF-only)."""  # execute statement
 
+# NOTE: Rain NetCDF inputs follow cdl/rain_time_dependent.cdl (CF-1.10).
+
 # Import typing primitives.
 from typing import Any, Dict, Optional  # import typing import Any, Dict, Optional
 

@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """Rain input and blending (rank0 read, broadcast)."""  # execute statement
 
+# NOTE: Rain NetCDF inputs follow cdl/rain_time_dependent.cdl (CF-1.10).
+
 # Import dataclass for structured source definition.
 from dataclasses import dataclass  # import dataclasses import dataclass
 
@@ -13,6 +15,20 @@ import numpy as np  # import numpy as np
 # Import xarray.
 import xarray as xr  # import xarray as xr
 
+# Import CF schema helpers.
+from .cf_schema import (  # import .cf_schema
+    RAIN_CRS_VAR,
+    RAIN_GRID_MAPPING_ATTR,
+    RAIN_LAT_VAR,
+    RAIN_LON_VAR,
+    RAIN_RATE_UNITS,
+    RAIN_RATE_VAR,
+    RAIN_TIME_UNITS,
+    RAIN_TIME_VAR,
+    hours_since_1900_to_datetime64,
+    normalize_cf_time_units,
+)
+
 
 @dataclass  # apply decorator
 class RainSource:  # define class RainSource
@@ -23,19 +39,27 @@ class RainSource:  # define class RainSource
     mode: str  # execute statement
     path: Optional[str] = None  # execute statement
     var: Optional[str] = None  # execute statement
-    time_var: str = "time"  # execute statement
+    time_var: str = RAIN_TIME_VAR  # execute statement
+    lat_var: str = RAIN_LAT_VAR  # execute statement
+    lon_var: str = RAIN_LON_VAR  # execute statement
+    crs_var: str = RAIN_CRS_VAR  # execute statement
+    time_units: str = RAIN_TIME_UNITS  # execute statement
+    rate_units: str = RAIN_RATE_UNITS  # execute statement
+    require_cf: bool = True  # execute statement
+    require_time_dim: bool = True  # execute statement
     select: str = "nearest"  # execute statement
     value: Optional[float] = None  # execute statement
 
 
 # Simple cache to avoid reopening NetCDF files each step.
 _NC_CACHE: Dict[str, xr.Dataset] = {}  # execute statement
+_NC_SCHEMA_CACHE: Dict[str, bool] = {}  # execute statement
 
 
 def xr_open_cached(path: str) -> xr.Dataset:  # define function xr_open_cached
     """Open a NetCDF dataset with caching."""  # execute statement
     if path not in _NC_CACHE:  # check condition path not in _NC_CACHE:
-        _NC_CACHE[path] = xr.open_dataset(path)  # execute statement
+        _NC_CACHE[path] = xr.open_dataset(path, decode_times=True)  # execute statement
     return _NC_CACHE[path]  # return _NC_CACHE[path]
 
 
@@ -47,11 +71,14 @@ def xr_close_cache() -> None:  # define function xr_close_cache
         except Exception:  # handle exception Exception:
             pass  # no-op placeholder
     _NC_CACHE.clear()  # execute statement
+    _NC_SCHEMA_CACHE.clear()  # execute statement
 
 
 def build_rain_sources(cfg: Dict[str, Any]) -> List[RainSource]:  # define function build_rain_sources
     """Parse cfg['rain']['sources'] into a list of RainSource."""  # execute statement
-    sources_cfg = cfg.get("rain", {}).get("sources", {})  # set sources_cfg
+    rain_cfg = cfg.get("rain", {})  # set rain_cfg
+    schema_cfg = rain_cfg.get("schema", {})  # set schema_cfg
+    sources_cfg = rain_cfg.get("sources", {})  # set sources_cfg
     out: List[RainSource] = []  # execute statement
     for name, sc in sources_cfg.items():  # loop over name, sc in sources_cfg.items():
         out.append(RainSource(  # execute statement
@@ -60,8 +87,15 @@ def build_rain_sources(cfg: Dict[str, Any]) -> List[RainSource]:  # define funct
             weight=float(sc.get("weight", 0.0)),  # set weight
             mode=str(sc.get("mode", "intensity_mmph")),  # set mode
             path=sc.get("path", None),  # set path
-            var=sc.get("var", None),  # set var
-            time_var=str(sc.get("time_var", "time")),  # set time_var
+            var=sc.get("var", schema_cfg.get("rain_var", RAIN_RATE_VAR)),  # set var
+            time_var=str(sc.get("time_var", schema_cfg.get("time_var", RAIN_TIME_VAR))),  # set time_var
+            lat_var=str(sc.get("lat_var", schema_cfg.get("lat_var", RAIN_LAT_VAR))),  # set lat_var
+            lon_var=str(sc.get("lon_var", schema_cfg.get("lon_var", RAIN_LON_VAR))),  # set lon_var
+            crs_var=str(sc.get("crs_var", schema_cfg.get("crs_var", RAIN_CRS_VAR))),  # set crs_var
+            time_units=str(sc.get("time_units", schema_cfg.get("time_units", RAIN_TIME_UNITS))),  # set time_units
+            rate_units=str(sc.get("rate_units", schema_cfg.get("rate_units", RAIN_RATE_UNITS))),  # set rate_units
+            require_cf=bool(sc.get("require_cf", schema_cfg.get("require_cf", True))),  # set require_cf
+            require_time_dim=bool(sc.get("require_time_dim", schema_cfg.get("require_time_dim", True))),  # set require_time_dim
             select=str(sc.get("select", "nearest")),  # set select
             value=sc.get("value", None),  # set value
         ))  # execute statement
@@ -84,8 +118,63 @@ def pick_time_index(time_vals: np.ndarray, target: np.datetime64) -> int:  # def
     """Pick nearest time index for a datetime64 time axis."""  # execute statement
     tv = np.asarray(time_vals)  # set tv
     if tv.dtype.kind != "M":  # check condition tv.dtype.kind != "M":
-        raise ValueError("Time axis is not datetime64; use select='step' or enable CF time decoding.")  # raise ValueError("Time axis is not datetime64; use select='step' or enable CF time decoding.")
+        raise ValueError("Time axis is not datetime64; verify CF time decoding.")  # raise ValueError("Time axis is not datetime64; verify CF time decoding.")
     return int(np.argmin(np.abs(tv - target)))  # return int(np.argmin(np.abs(tv - target)))
+
+
+def _decode_cf_time_axis(ds: xr.Dataset, src: RainSource) -> np.ndarray:  # define function _decode_cf_time_axis
+    """Return datetime64 time axis from a CF time coordinate."""  # execute statement
+    if src.time_var not in ds:  # check condition src.time_var not in ds:
+        raise ValueError(f"Rain dataset missing time variable '{src.time_var}'")  # raise ValueError(f"Rain dataset missing time variable '{src.time_var}'")
+    time_da = ds[src.time_var]  # set time_da
+    time_vals = np.asarray(time_da.values)  # set time_vals
+    if time_vals.dtype.kind == "M":  # check condition time_vals.dtype.kind == "M":
+        return time_vals  # return time_vals
+    if src.require_cf and "units" not in time_da.attrs:  # check condition src.require_cf and "units" not in time_da.attrs:
+        raise ValueError(f"Rain time variable '{src.time_var}' missing CF units attribute")  # raise ValueError(f"Rain time variable '{src.time_var}' missing CF units attribute")
+    units = normalize_cf_time_units(str(time_da.attrs.get("units", src.time_units)))  # set units
+    expected = normalize_cf_time_units(src.time_units)  # set expected
+    if src.require_cf and units != expected:  # check condition src.require_cf and units != expected:
+        raise ValueError(f"Rain time units '{units}' do not match expected '{expected}'")  # raise ValueError(f"Rain time units '{units}' do not match expected '{expected}'")
+    return hours_since_1900_to_datetime64(time_vals)  # return hours_since_1900_to_datetime64(time_vals)
+
+
+def _validate_rain_dataset(ds: xr.Dataset, src: RainSource) -> None:  # define function _validate_rain_dataset
+    """Validate a rain dataset against the CF time-dependent schema."""  # execute statement
+    if not src.require_cf:  # check condition not src.require_cf:
+        return  # return None
+    if src.var not in ds:  # check condition src.var not in ds:
+        raise ValueError(f"Rain variable '{src.var}' not found in {src.path}")  # raise ValueError(f"Rain variable '{src.var}' not found in {src.path}")
+    da = ds[src.var]  # set da
+
+    if src.time_var not in ds:  # check condition src.time_var not in ds:
+        raise ValueError(f"Rain dataset missing time coordinate '{src.time_var}'")  # raise ValueError(f"Rain dataset missing time coordinate '{src.time_var}'")
+    if src.lat_var not in ds:  # check condition src.lat_var not in ds:
+        raise ValueError(f"Rain dataset missing latitude coordinate '{src.lat_var}'")  # raise ValueError(f"Rain dataset missing latitude coordinate '{src.lat_var}'")
+    if src.lon_var not in ds:  # check condition src.lon_var not in ds:
+        raise ValueError(f"Rain dataset missing longitude coordinate '{src.lon_var}'")  # raise ValueError(f"Rain dataset missing longitude coordinate '{src.lon_var}'")
+
+    if src.require_time_dim and src.time_var not in da.dims:  # check condition src.require_time_dim and src.time_var not in da.dims:
+        raise ValueError(f"Rain variable '{src.var}' must include time dimension '{src.time_var}'")  # raise ValueError(f"Rain variable '{src.var}' must include time dimension '{src.time_var}'")
+    if src.lat_var not in da.dims or src.lon_var not in da.dims:  # check condition src.lat_var not in da.dims or src.lon_var not in da.dims:
+        raise ValueError(f"Rain variable '{src.var}' must include dims '{src.lat_var}', '{src.lon_var}'")  # raise ValueError(f"Rain variable '{src.var}' must include dims '{src.lat_var}', '{src.lon_var}'")
+
+    lat_units = str(ds[src.lat_var].attrs.get("units", "")).lower().strip()  # set lat_units
+    lon_units = str(ds[src.lon_var].attrs.get("units", "")).lower().strip()  # set lon_units
+    if src.require_cf and (not lat_units or "degrees_north" not in lat_units):  # check condition src.require_cf and (not lat_units or "degrees_north" not in lat_units):
+        raise ValueError(f"Latitude '{src.lat_var}' missing CF units 'degrees_north'")  # raise ValueError(f"Latitude '{src.lat_var}' missing CF units 'degrees_north'")
+    if src.require_cf and (not lon_units or "degrees_east" not in lon_units):  # check condition src.require_cf and (not lon_units or "degrees_east" not in lon_units):
+        raise ValueError(f"Longitude '{src.lon_var}' missing CF units 'degrees_east'")  # raise ValueError(f"Longitude '{src.lon_var}' missing CF units 'degrees_east'")
+
+    grid_mapping = str(da.attrs.get(RAIN_GRID_MAPPING_ATTR, ""))  # set grid_mapping
+    if src.crs_var and (src.crs_var not in ds or grid_mapping != src.crs_var):  # check condition src.crs_var and (src.crs_var not in ds or grid_mapping != src.crs_var):
+        raise ValueError(f"Rain variable '{src.var}' must reference grid mapping '{src.crs_var}'")  # raise ValueError(f"Rain variable '{src.var}' must reference grid mapping '{src.crs_var}'")
+
+    if src.require_cf and "units" not in da.attrs:  # check condition src.require_cf and "units" not in da.attrs:
+        raise ValueError(f"Rain variable '{src.var}' missing CF units attribute")  # raise ValueError(f"Rain variable '{src.var}' missing CF units attribute")
+    units = str(da.attrs.get("units", "")).strip()  # set units
+    if units and units != src.rate_units:  # check condition units and units != src.rate_units:
+        raise ValueError(f"Rain units '{units}' do not match expected '{src.rate_units}'")  # raise ValueError(f"Rain units '{units}' do not match expected '{src.rate_units}'")
 
 
 def blended_rain_step_mm_rank0(  # define function blended_rain_step_mm_rank0
@@ -112,8 +201,9 @@ def blended_rain_step_mm_rank0(  # define function blended_rain_step_mm_rank0
             if not src.path or not src.var:  # check condition not src.path or not src.var:
                 raise ValueError(f"Rain source '{src.name}' netcdf requires 'path' and 'var'")  # raise ValueError(f"Rain source '{src.name}' netcdf requires 'path' and 'var'")
             ds = xr_open_cached(src.path)  # set ds
-            if src.var not in ds:  # check condition src.var not in ds:
-                raise ValueError(f"Rain variable '{src.var}' not found in {src.path}")  # raise ValueError(f"Rain variable '{src.var}' not found in {src.path}")
+            if not _NC_SCHEMA_CACHE.get(src.path, False):  # check condition not _NC_SCHEMA_CACHE.get(src.path, False):
+                _validate_rain_dataset(ds, src)  # execute statement
+                _NC_SCHEMA_CACHE[src.path] = True  # execute statement
             da = ds[src.var]  # set da
 
             if da.ndim == 2:  # check condition da.ndim == 2:
@@ -123,7 +213,8 @@ def blended_rain_step_mm_rank0(  # define function blended_rain_step_mm_rank0
                 if src.select == "step" or sim_time is None:  # check condition src.select == "step" or sim_time is None:
                     it = min(step_idx, da.sizes[tdim] - 1)  # set it
                 else:  # fallback branch
-                    it = pick_time_index(np.asarray(ds[tdim].values), sim_time)  # set it
+                    time_vals = _decode_cf_time_axis(ds, src)  # set time_vals
+                    it = pick_time_index(time_vals, sim_time)  # set it
                 field = np.asarray(da.isel({tdim: it}).values)  # set field
             else:  # fallback branch
                 raise ValueError("Rain var must be 2D or 3D (time,y,x)")  # raise ValueError("Rain var must be 2D or 3D (time,y,x)")

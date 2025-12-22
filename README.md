@@ -71,9 +71,9 @@ Required CF grid mapping (per `/cdl/domain.cdl`):
 - Each spatial variable (`dem`, `d8`, `cn`, `channel_mask`) should reference it via `grid_mapping = "crs"`.
 
 ### Rain NetCDFs
-Each rain source follows the CDL templates in `/cdl`:
-- **Static rainfall**: `rain_rate(latitude,longitude)` with units `mm h-1`
+Each rain source follows the CDL template in `/cdl/rain_time_dependent.cdl`:
 - **Time-dependent rainfall**: `rain_rate(time,latitude,longitude)` with units `mm h-1`
+- Static grids are only accepted if you disable `rain.schema.require_time_dim`.
 
 Time-dependent files must include a `time(time)` coordinate with:
 - `description = "Time"`

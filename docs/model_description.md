@@ -185,7 +185,7 @@ Normalization is performed using robust percentile thresholds to reduce sensitiv
 
 ### Inputs
 - Domain NetCDF containing DEM, D8, CN, and optional channel mask.
-- One or more rainfall NetCDF datasets, possibly time-dependent.
+- One or more rainfall NetCDF datasets following `cdl/rain_time_dependent.cdl`.
 
 ### Outputs
 - flood depth field, expressed in meters,

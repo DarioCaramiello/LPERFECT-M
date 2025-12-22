@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """Command line interface for LPERFECT."""  # execute statement
 
+# NOTE: Rain NetCDF inputs follow cdl/rain_time_dependent.cdl (CF-1.10).
+
 # Import argparse for CLI parsing.
 import argparse  # import argparse
 
