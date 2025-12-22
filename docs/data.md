@@ -3,9 +3,9 @@
 This document describes **how to prepare all input datasets** required by **LPERFECT**, in a way that is **fully consistent with the CDL templates** in `/cdl`:
 
 - `cdl/domain.cdl`
-- `cdl/rain_time_dependent.cdl`
-- `cdl/rain_static.cdl`
-- `cdl/rain_bundle_optional.cdl`
+- `cdl/rain_time_dependent.cdl` (required rain forcing schema)
+- `cdl/rain_static.cdl` (optional, requires relaxing `rain.schema.require_time_dim`)
+- `cdl/rain_bundle_optional.cdl` (optional, same requirement)
 - `cdl/output_flood_depth.cdl`
 - `cdl/restart_state.cdl`
 
@@ -18,7 +18,7 @@ LPERFECT **only uses NetCDF inputs** and follows **CF-1.10 conventions** to ensu
 LPERFECT requires two categories of input data:
 
 1. **Domain data** (static, gridded)
-2. **Rainfall forcing data** (static or time-dependent)
+2. **Rainfall forcing data** (time-dependent by default)
 
 All datasets must:
 - share the **same spatial grid** (same `latitude`, `longitude`, resolution, CRS),
@@ -120,7 +120,8 @@ Requirements:
 
 ## 3. Rainfall Forcing Datasets
 
-LPERFECT supports **multiple rainfall sources**, each provided as a NetCDF file.
+LPERFECT supports **multiple rainfall sources**, each provided as a NetCDF file. By
+default, the model enforces the time-dependent schema (`cdl/rain_time_dependent.cdl`).
 
 ### 3.1 Time-Dependent Rainfall (`rain_time_dependent.nc`)
 
@@ -160,6 +161,9 @@ LPERFECT supports:
 - nearest-time selection,
 - step-index-based selection.
 
+The time-dependent format is **required** when `rain.schema.require_time_dim = true`
+(the default).
+
 ### 3.2 Static Rainfall (`rain_static.nc`)
 
 **Reference specification:** `cdl/rain_static.cdl`
@@ -168,6 +172,9 @@ Used for:
 - design storms,
 - synthetic experiments,
 - constant rainfall scenarios.
+
+Static rainfall is only accepted when you set `rain.schema.require_time_dim = false`
+and (if needed) `rain.schema.require_cf = false` in your configuration.
 
 Required variable:
 
@@ -194,7 +201,8 @@ Each variable uses units of `mm h-1` and shares the same `time`, `latitude`, and
 `longitude` coordinates as the other rainfall inputs.
 
 The bundle also defines a `crs` variable with grid-mapping attributes; each rain
-variable should reference it via `grid_mapping = "crs"`.
+variable should reference it via `grid_mapping = "crs"`. Use this format only if
+you disable strict CF validation for the corresponding sources.
 
 ---
 

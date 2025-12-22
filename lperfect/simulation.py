@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """Core simulation driver for LPERFECT."""  # execute statement
 
+# NOTE: Rain NetCDF inputs follow cdl/rain_time_dependent.cdl (CF-1.10).
+
 # Import typing primitives.
 from typing import Any, Dict  # import typing import Any, Dict
 

@@ -8,6 +8,8 @@ This module provides:
 - scatter/gather helpers for restart and output
 """
 
+# NOTE: Rain NetCDF inputs follow cdl/rain_time_dependent.cdl (CF-1.10).
+
 # Import typing primitives.
 from typing import Any, List, Optional, Tuple  # import typing import Any, List, Optional, Tuple
 

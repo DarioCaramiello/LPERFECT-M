@@ -46,8 +46,8 @@ The JSON file mirrors the default configuration structure. A complete example
       "d8": "d8",
       "cn": "cn",
       "channel_mask": "channel_mask",
-      "x": "x",
-      "y": "y"
+      "x": "longitude",
+      "y": "latitude"
     }
   },
   "model": {
@@ -63,33 +63,26 @@ The JSON file mirrors the default configuration structure. A complete example
     "log_every": 10
   },
   "rain": {
+    "schema": {
+      "time_var": "time",
+      "lat_var": "latitude",
+      "lon_var": "longitude",
+      "rain_var": "rain_rate",
+      "crs_var": "crs",
+      "time_units": "hours since 1900-01-01 00:00:0.0",
+      "rate_units": "mm h-1",
+      "require_cf": true,
+      "require_time_dim": true
+    },
     "sources": {
-      "radar": {
+      "rain": {
         "kind": "netcdf",
-        "path": "radar_nowcast.nc",
+        "path": "rain_time_dependent.nc",
         "var": "rain_rate",
         "time_var": "time",
         "select": "nearest",
         "mode": "intensity_mmph",
-        "weight": 0.6
-      },
-      "station": {
-        "kind": "netcdf",
-        "path": "stations_nowcast.nc",
-        "var": "rain_rate",
-        "time_var": "time",
-        "select": "nearest",
-        "mode": "intensity_mmph",
-        "weight": 0.2
-      },
-      "model": {
-        "kind": "netcdf",
-        "path": "wrf_forecast.nc",
-        "var": "rain_rate",
-        "time_var": "time",
-        "select": "nearest",
-        "mode": "intensity_mmph",
-        "weight": 0.2
+        "weight": 1.0
       }
     }
   },
@@ -223,6 +216,23 @@ Controls the core simulation parameters.
 Controls rainfall sources and blending. Rainfall sources are combined as a weighted sum
 each timestep. Weights do not need to sum to 1, but relative values matter.
 
+### `rain.schema`
+
+`rain.schema` sets **CF-1.10 defaults** and validation behavior for time-dependent rain
+forcing files (see `cdl/rain_time_dependent.cdl`).
+
+| Key | Default | Description | Example |
+| --- | --- | --- | --- |
+| `time_var` | `time` | Name of the CF time coordinate. | `"time_var": "time"` |
+| `lat_var` | `latitude` | Name of the latitude coordinate. | `"lat_var": "latitude"` |
+| `lon_var` | `longitude` | Name of the longitude coordinate. | `"lon_var": "longitude"` |
+| `rain_var` | `rain_rate` | Name of the rainfall rate variable. | `"rain_var": "rain_rate"` |
+| `crs_var` | `crs` | Name of the CF grid mapping variable. | `"crs_var": "crs"` |
+| `time_units` | `hours since 1900-01-01 00:00:0.0` | CF time units string. | `"time_units": "hours since 1900-01-01 00:00:0.0"` |
+| `rate_units` | `mm h-1` | Expected rain rate units. | `"rate_units": "mm h-1"` |
+| `require_cf` | `true` | Enforce CF metadata checks for rain inputs. | `"require_cf": true` |
+| `require_time_dim` | `true` | Require a time dimension on rain_rate. | `"require_time_dim": true` |
+
 ### `rain.sources`
 
 `rain.sources` is a mapping of **source name → configuration**. Each source has:
@@ -233,8 +243,15 @@ each timestep. Weights do not need to sum to 1, but relative values matter.
 | `weight` | `0.0` | Weight used in the blending sum. | `"weight": 0.3` |
 | `mode` | `intensity_mmph` | Data units: `intensity_mmph` (mm/hour). CDL-compliant rain files use `rain_rate` with units `mm h-1`. | `"mode": "intensity_mmph"` |
 | `path` | `null` | NetCDF path (required when `kind = netcdf`). | `"path": "radar.nc"` |
-| `var` | `null` | NetCDF variable name (required when `kind = netcdf`). | `"var": "rain_rate"` |
+| `var` | `rain_rate` | NetCDF variable name (required when `kind = netcdf`). | `"var": "rain_rate"` |
 | `time_var` | `time` | Name of the time coordinate. Used when data is 3D. | `"time_var": "valid_time"` |
+| `lat_var` | `latitude` | Latitude coordinate name. | `"lat_var": "lat"` |
+| `lon_var` | `longitude` | Longitude coordinate name. | `"lon_var": "lon"` |
+| `crs_var` | `crs` | Grid mapping variable name. | `"crs_var": "crs"` |
+| `time_units` | `hours since 1900-01-01 00:00:0.0` | CF time units. | `"time_units": "hours since 1900-01-01 00:00:0.0"` |
+| `rate_units` | `mm h-1` | Rain rate units. | `"rate_units": "mm h-1"` |
+| `require_cf` | `true` | Enforce CF validation for this source. | `"require_cf": true` |
+| `require_time_dim` | `true` | Require time dimension for this source. | `"require_time_dim": true` |
 | `select` | `nearest` | How to choose a time slice: `nearest` (by timestamp) or `step` (by index). | `"select": "step"` |
 | `value` | `null` | Scalar intensity/depth (required when `kind = scalar`). | `"value": 2.5` |
 
@@ -244,14 +261,14 @@ each timestep. Weights do not need to sum to 1, but relative values matter.
 {
   "rain": {
     "sources": {
-      "radar": {
+      "rain": {
         "kind": "netcdf",
-        "path": "radar_nowcast.nc",
+        "path": "rain_time_dependent.nc",
         "var": "rain_rate",
         "time_var": "time",
         "select": "nearest",
         "mode": "intensity_mmph",
-        "weight": 0.7
+        "weight": 1.0
       }
     }
   }
@@ -280,6 +297,7 @@ each timestep. Weights do not need to sum to 1, but relative values matter.
 - A 2D variable is treated as time-invariant; a 3D variable must have a time dimension.
 - `select = "nearest"` requires `model.start_time` (otherwise time selection falls back to step index).
 - All rain fields must match the domain grid shape.
+- With `require_cf = true`, inputs must comply with `cdl/rain_time_dependent.cdl`.
 
 ---
 
@@ -370,9 +388,9 @@ A minimal JSON file that only changes rain sources and output path could be:
 {
   "rain": {
     "sources": {
-      "radar": {
+      "rain": {
         "kind": "netcdf",
-        "path": "radar_nowcast.nc",
+        "path": "rain_time_dependent.nc",
         "var": "rain_rate",
         "mode": "intensity_mmph",
         "weight": 1.0

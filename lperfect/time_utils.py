@@ -1,11 +1,16 @@
 # -*- coding: utf-8 -*-
 """Time helpers for LPERFECT."""  # execute statement
 
+# NOTE: Rain NetCDF inputs follow cdl/rain_time_dependent.cdl (CF-1.10).
+
 # Import datetime helpers.
 from datetime import datetime, timezone  # import datetime import datetime, timezone
 
 # Import numpy for datetime64 parsing.
 import numpy as np  # import numpy as np
+
+# Import CF schema constants.
+from .cf_schema import RAIN_TIME_UNITS  # import .cf_schema import RAIN_TIME_UNITS
 
 
 def utc_now_iso() -> str:  # define function utc_now_iso
@@ -34,3 +39,15 @@ def parse_iso8601_to_datetime64(s: str | None) -> np.datetime64 | None:  # defin
         ss = ss[:-1] + "+00:00"  # set ss
     # Convert to numpy datetime64 (timezone-aware strings are accepted by numpy).
     return np.datetime64(ss)  # return np.datetime64(ss)
+
+
+def datetime_to_hours_since_1900(dt: datetime) -> int:  # define function datetime_to_hours_since_1900
+    """Convert datetime to integer hours since 1900-01-01 UTC."""  # execute statement
+    base = datetime(1900, 1, 1, tzinfo=timezone.utc)  # set base
+    hours = (dt - base).total_seconds() / 3600.0  # set hours
+    return int(round(hours))  # return int(round(hours))
+
+
+def rain_time_units() -> str:  # define function rain_time_units
+    """Return the CF time units used by rain forcing."""  # execute statement
+    return RAIN_TIME_UNITS  # return RAIN_TIME_UNITS

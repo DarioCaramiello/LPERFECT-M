@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """Particle container and helpers."""  # execute statement
 
+# NOTE: Rain NetCDF inputs follow cdl/rain_time_dependent.cdl (CF-1.10).
+
 # Import dataclass for a simple structured object.
 from dataclasses import dataclass  # import dataclasses import dataclass
 

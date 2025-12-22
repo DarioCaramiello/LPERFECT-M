@@ -1,6 +1,6 @@
 # Weather radar VMI GeoTIFF to rainfall NetCDF
 
-`utils/wr_to_rain.py` converts a single-band weather radar VMI GeoTIFF (reflectivity in dBZ) into a CF-compliant rainfall NetCDF file that can be used as a rain forcing input for LPERFECT. The converter normalizes raster dimensions, applies a Z–R relationship to compute rain rates, attaches CF metadata, and writes a `rain_rate` variable with a time axis.
+`utils/wr_to_rain.py` converts a single-band weather radar VMI GeoTIFF (reflectivity in dBZ) into a CF-compliant rainfall NetCDF file that can be used as a rain forcing input for LPERFECT. The converter normalizes raster dimensions, applies a Z–R relationship to compute rain rates, attaches CF metadata, and writes a `rain_rate` variable with a time axis aligned with `cdl/rain_time_dependent.cdl`.
 
 ## What the script produces
 
@@ -8,7 +8,7 @@ The output NetCDF includes:
 
 - `rain_rate(time, latitude, longitude)` in **mm h-1**.
 - A `crs` variable with CF grid mapping metadata.
-- `time` in **hours since 1900-01-01 00:00:0.0**.
+- `time` in **hours since 1900-01-01 00:00:0.0** (CF-1.10).
 - Global attributes describing the source, institution, and history.
 
 ## Requirements

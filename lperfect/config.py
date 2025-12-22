@@ -6,11 +6,25 @@ The model is configured via:
 2) Optional CLI overrides (handled in cli.py).
 """
 
+# NOTE: Rain NetCDF inputs follow cdl/rain_time_dependent.cdl (CF-1.10).
+
 # Import JSON for reading configuration files.
 import json  # import json
 
 # Import typing primitives.
 from typing import Any, Dict  # import typing import Any, Dict
+
+# Import CF schema defaults.
+from .cf_schema import (  # import .cf_schema
+    CF_CONVENTIONS,
+    RAIN_CRS_VAR,
+    RAIN_LAT_VAR,
+    RAIN_LON_VAR,
+    RAIN_RATE_UNITS,
+    RAIN_RATE_VAR,
+    RAIN_TIME_UNITS,
+    RAIN_TIME_VAR,
+)
 
 
 def default_config() -> Dict[str, Any]:  # define function default_config
@@ -42,33 +56,26 @@ def default_config() -> Dict[str, Any]:  # define function default_config
             "log_every": 10,  # execute statement
         },  # execute statement
         "rain": {  # execute statement
+            "schema": {  # execute statement
+                "time_var": RAIN_TIME_VAR,  # execute statement
+                "lat_var": RAIN_LAT_VAR,  # execute statement
+                "lon_var": RAIN_LON_VAR,  # execute statement
+                "rain_var": RAIN_RATE_VAR,  # execute statement
+                "crs_var": RAIN_CRS_VAR,  # execute statement
+                "time_units": RAIN_TIME_UNITS,  # execute statement
+                "rate_units": RAIN_RATE_UNITS,  # execute statement
+                "require_cf": True,  # execute statement
+                "require_time_dim": True,  # execute statement
+            },  # execute statement
             "sources": {  # execute statement
-                "radar": {  # execute statement
+                "rain": {  # execute statement
                     "kind": "netcdf",  # execute statement
-                    "path": "radar_nowcast.nc",  # execute statement
-                    "var": "rain_rate",  # execute statement
-                    "time_var": "time",  # execute statement
+                    "path": "rain_time_dependent.nc",  # execute statement
+                    "var": RAIN_RATE_VAR,  # execute statement
+                    "time_var": RAIN_TIME_VAR,  # execute statement
                     "select": "nearest",  # execute statement
                     "mode": "intensity_mmph",  # execute statement
-                    "weight": 0.6,  # execute statement
-                },  # execute statement
-                "station": {  # execute statement
-                    "kind": "netcdf",  # execute statement
-                    "path": "stations_nowcast.nc",  # execute statement
-                    "var": "rain_rate",  # execute statement
-                    "time_var": "time",  # execute statement
-                    "select": "nearest",  # execute statement
-                    "mode": "intensity_mmph",  # execute statement
-                    "weight": 0.2,  # execute statement
-                },  # execute statement
-                "model": {  # execute statement
-                    "kind": "netcdf",  # execute statement
-                    "path": "wrf_forecast.nc",  # execute statement
-                    "var": "rain_rate",  # execute statement
-                    "time_var": "time",  # execute statement
-                    "select": "nearest",  # execute statement
-                    "mode": "intensity_mmph",  # execute statement
-                    "weight": 0.2,  # execute statement
+                    "weight": 1.0,  # execute statement
                 },  # execute statement
             }  # execute statement
         },  # execute statement
@@ -86,7 +93,7 @@ def default_config() -> Dict[str, Any]:  # define function default_config
         },  # execute statement
         "output": {  # execute statement
             "out_netcdf": "flood_depth.nc",  # execute statement
-            "Conventions": "CF-1.10",  # execute statement
+            "Conventions": CF_CONVENTIONS,  # execute statement
             "title": "LPERFECT flood depth + hydrogeological risk index",  # execute statement
             "institution": "UniParthenope",  # execute statement
         },  # execute statement

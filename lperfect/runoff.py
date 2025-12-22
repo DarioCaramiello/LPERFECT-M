@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """Runoff generation models (currently SCS Curve Number)."""  # execute statement
 
+# NOTE: Rain NetCDF inputs follow cdl/rain_time_dependent.cdl (CF-1.10).
+
 # Import numpy.
 import numpy as np  # import numpy as np
 

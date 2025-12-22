@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """Logging utilities for LPERFECT."""  # execute statement
 
+# NOTE: Rain NetCDF inputs follow cdl/rain_time_dependent.cdl (CF-1.10).
+
 # Import the standard logging module.
 import logging  # import logging
 

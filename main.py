@@ -12,6 +12,8 @@ This file is intentionally small:
 All real logic lives in the `lperfect/` package.
 """
 
+# NOTE: Rain NetCDF inputs follow cdl/rain_time_dependent.cdl (CF-1.10).
+
 # Import logging (for module-level logger).
 import logging
 

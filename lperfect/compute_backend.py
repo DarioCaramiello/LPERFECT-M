@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """Optional array backend helpers (CPU/GPU)."""  # execute statement
 
+# NOTE: Rain NetCDF inputs follow cdl/rain_time_dependent.cdl (CF-1.10).
+
 # Import importlib for optional dependency checks.
 import importlib  # import importlib
 import importlib.util  # import importlib.util

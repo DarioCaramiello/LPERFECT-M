@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """Lagrangian routing helpers: particle spawning and advection."""  # execute statement
 
+# NOTE: Rain NetCDF inputs follow cdl/rain_time_dependent.cdl (CF-1.10).
+
 # Import typing primitives.
 from typing import Optional, Tuple  # import typing import Optional, Tuple
 

@@ -145,9 +145,9 @@ For a ready-made CLI workflow, see [`docs/make_domains.md`](make_domains.md).
 
 ### 5.1 Supported Rainfall Formats
 
-Rainfall NetCDFs can be:
-- Static: `(latitude, longitude)`
-- Time-varying: `(time, latitude, longitude)`
+Rainfall NetCDFs are **time-varying by default**:
+- `(time, latitude, longitude)` per `cdl/rain_time_dependent.cdl`
+- Static grids are only accepted if you set `rain.schema.require_time_dim = false`.
 
 Required variable:
 - `rain_rate` with units **mm h-1**
@@ -172,7 +172,7 @@ gdalwarp -t_srs EPSG:32633 -tr 100 100 -r bilinear   rain_raw.tif rain_aligned.t
 
 ### 5.3 Time Handling
 
-If rainfall has a time dimension:
+Since rainfall has a time dimension:
 - Include a proper `time` coordinate
 - Choose selection method in the config:
   - `nearest`
