@@ -313,7 +313,8 @@ def build_domain(
             dims=(latitude_name,),
             attrs=_coord_attrs(latitude_name, dem_da[latitude_name].attrs),
         )
-        fill_dem = _pick_fill_value(dem_da, np.nan)
+        #fill_dem = _pick_fill_value(dem_da, 1e37)
+        fill_dem = 1e37
         fill_d8 = None
         fill_cn = None
         fill_mask = None
@@ -324,8 +325,10 @@ def build_domain(
                 latitude_name: y_coord,
             }
         )
-        fill_d8 = _coerce_int_fill(_pick_fill_value(d8_da if d8_path else dem_da, -9999), -9999)
-        fill_cn = _pick_fill_value(cn_da if cn_path else dem_da, -9999.0)
+        #fill_d8 = _coerce_int_fill(_pick_fill_value(d8_da if d8_path else dem_da, 0), 0)
+        fill_d8 = 0
+        #fill_cn = _pick_fill_value(cn_da if cn_path else dem_da, 0)
+        fill_cn = 0
         if mask_da is not None:
             fill_mask = _coerce_int_fill(_pick_fill_value(mask_da, 0), 0)
         progress.update(1)
