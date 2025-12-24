@@ -21,8 +21,10 @@ import argparse
 import json
 import logging
 import math
+import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Any, Dict, Tuple, Optional
+from typing import Any, Dict, Tuple, Optional, List
 
 import numpy as np
 import xarray as xr
@@ -39,6 +41,33 @@ LON_NAME = "longitude"
 TIME_NAME = "time"
 FLOOD_NAME = "flood_depth"
 RISK_NAME = "risk_index"
+
+
+def _try_init_mpi(disable_mpi: bool):
+    """Return (comm, rank, world_size) or (None, 0, 1) when MPI unavailable/disabled."""
+    if disable_mpi:
+        return None, 0, 1
+
+    try:
+        from mpi4py import MPI
+    except Exception:
+        return None, 0, 1
+
+    comm = MPI.COMM_WORLD
+    world_size = max(1, comm.Get_size())
+    rank = comm.Get_rank()
+    if world_size <= 1:
+        return None, rank, 1
+    return comm, rank, world_size
+
+
+def _calc_thread_workers(requested: int) -> int:
+    if requested is None or requested == 0:
+        try:
+            return max(1, (os.cpu_count() or 1) // 2)
+        except Exception:
+            return 1
+    return max(1, int(requested))
 
 
 def _is_finite(x: float) -> bool:
@@ -279,6 +308,172 @@ def compute_area_stats(
     return flood_mean, flood_max, risk_mean, risk_max, flood_pct
 
 
+def _process_feature(
+    idx: int,
+    feat: Dict[str, Any],
+    args: argparse.Namespace,
+    *,
+    lat: np.ndarray,
+    lon: np.ndarray,
+    lat_edges: np.ndarray,
+    lon_edges: np.ndarray,
+    flood2d: xr.DataArray,
+    risk2d: xr.DataArray,
+    fill_flood: Any,
+    fill_risk: Any,
+    to4326: Transformer,
+    to_area: Transformer,
+    back_to_4326: Transformer,
+    risk_thr_tuple: Optional[Tuple[float, float, float]],
+) -> Dict[str, Any]:
+    """
+    Process a single feature and return a small dict with results.
+    Dict keys: idx, feature, updated, skipped.
+    """
+    feature = feat
+    g = feature.get("geometry")
+    if not g:
+        return {"idx": idx, "feature": feature, "updated": False, "skipped": True}
+
+    geom_src = shape(g)
+    if geom_src.is_empty:
+        return {"idx": idx, "feature": feature, "updated": False, "skipped": True}
+
+    props = feature.get("properties")
+    if props is None or not isinstance(props, dict):
+        props = {}
+        feature["properties"] = props
+
+    if args.geojson_epsg != 4326:
+        geom_4326 = shp_transform(lambda x, y, z=None: to4326.transform(x, y), geom_src)
+    else:
+        geom_4326 = geom_src
+
+    if geom_4326.is_empty:
+        return {"idx": idx, "feature": feature, "updated": False, "skipped": True}
+
+    # ----- POINT: nearest sample -----
+    if isinstance(geom_4326, Point) and args.point_buffer_m <= 0:
+        lonp, latp = float(geom_4326.x), float(geom_4326.y)
+        ilat, ilon = nearest_ij(lat, lon, lat=latp, lon=lonp)
+
+        d = _as_float(flood2d.isel({LAT_NAME: ilat, LON_NAME: ilon}).values)
+        r = _as_float(risk2d.isel({LAT_NAME: ilat, LON_NAME: ilon}).values)
+
+        if _is_fill(d, fill_flood):
+            d = float("nan")
+        if _is_fill(r, fill_risk):
+            r = float("nan")
+
+        d_out = None if not _is_finite(d) else d
+        r_out = None if not _is_finite(r) else r
+
+        props[args.prop_flood_mean] = d_out
+        props[args.prop_flood_max] = d_out
+        props[args.prop_risk_mean] = r_out
+        props[args.prop_risk_max] = r_out
+
+        if args.depth_threshold_m is not None:
+            props[args.prop_flood_pct] = None
+
+        props[args.prop_risk_class] = classify_risk_r1_r4(r_out, risk_thr_tuple)
+        props[args.prop_mode] = "point"
+        if args.add_grid_idx:
+            props["_lperfect_ilat"] = ilat
+            props["_lperfect_ilon"] = ilon
+
+        return {"idx": idx, "feature": feature, "updated": True, "skipped": False}
+
+    # ----- POINT buffered to area -----
+    if isinstance(geom_4326, Point) and args.point_buffer_m > 0:
+        geom_area = shp_transform(lambda x, y, z=None: to_area.transform(x, y), geom_4326).buffer(args.point_buffer_m)
+        geom_4326 = shp_transform(lambda x, y, z=None: back_to_4326.transform(x, y), geom_area)
+
+    # ----- LINE buffered to corridor -----
+    if isinstance(geom_4326, (LineString, MultiLineString)):
+        if args.line_buffer_m > 0:
+            geom_area = shp_transform(lambda x, y, z=None: to_area.transform(x, y), geom_4326).buffer(args.line_buffer_m)
+            geom_4326 = shp_transform(lambda x, y, z=None: back_to_4326.transform(x, y), geom_area)
+        else:
+            c = geom_4326.centroid
+            lonp, latp = float(c.x), float(c.y)
+            ilat, ilon = nearest_ij(lat, lon, lat=latp, lon=lonp)
+            d = _as_float(flood2d.isel({LAT_NAME: ilat, LON_NAME: ilon}).values)
+            r = _as_float(risk2d.isel({LAT_NAME: ilat, LON_NAME: ilon}).values)
+            if _is_fill(d, fill_flood):
+                d = float("nan")
+            if _is_fill(r, fill_risk):
+                r = float("nan")
+
+            d_out = None if not _is_finite(d) else d
+            r_out = None if not _is_finite(r) else r
+
+            props[args.prop_flood_mean] = d_out
+            props[args.prop_flood_max] = d_out
+            props[args.prop_risk_mean] = r_out
+            props[args.prop_risk_max] = r_out
+            if args.depth_threshold_m is not None:
+                props[args.prop_flood_pct] = None
+
+            props[args.prop_risk_class] = classify_risk_r1_r4(r_out, risk_thr_tuple)
+            props[args.prop_mode] = "line_centroid"
+            return {"idx": idx, "feature": feature, "updated": True, "skipped": False}
+
+    # ----- AREA: Polygon/MultiPolygon (and buffered point/line) -----
+    if isinstance(geom_4326, (Polygon, MultiPolygon)):
+        fmean, fmax, rmean, rmax, fpct = compute_area_stats(
+            geom_4326=geom_4326,
+            lat_edges=lat_edges,
+            lon_edges=lon_edges,
+            flood2d=flood2d,
+            risk2d=risk2d,
+            fill_flood=fill_flood,
+            fill_risk=fill_risk,
+            to_area_from4326=to_area,
+            depth_thr_m=args.depth_threshold_m,
+        )
+
+        props[args.prop_flood_mean] = fmean
+        props[args.prop_flood_max] = fmax
+        props[args.prop_risk_mean] = rmean
+        props[args.prop_risk_max] = rmax
+
+        if args.depth_threshold_m is not None:
+            props[args.prop_flood_pct] = fpct
+            props.setdefault("_depth_threshold_m", args.depth_threshold_m)
+
+        base_for_class = rmax if args.risk_class_mode == "max" else rmean
+        props[args.prop_risk_class] = classify_risk_r1_r4(base_for_class, risk_thr_tuple)
+
+        props[args.prop_mode] = "area"
+        return {"idx": idx, "feature": feature, "updated": True, "skipped": False}
+
+    # Other geometries -> centroid fallback
+    c = geom_4326.centroid
+    lonp, latp = float(c.x), float(c.y)
+    ilat, ilon = nearest_ij(lat, lon, lat=latp, lon=lonp)
+    d = _as_float(flood2d.isel({LAT_NAME: ilat, LON_NAME: ilon}).values)
+    r = _as_float(risk2d.isel({LAT_NAME: ilat, LON_NAME: ilon}).values)
+    if _is_fill(d, fill_flood):
+        d = float("nan")
+    if _is_fill(r, fill_risk):
+        r = float("nan")
+
+    d_out = None if not _is_finite(d) else d
+    r_out = None if not _is_finite(r) else r
+
+    props[args.prop_flood_mean] = d_out
+    props[args.prop_flood_max] = d_out
+    props[args.prop_risk_mean] = r_out
+    props[args.prop_risk_max] = r_out
+    if args.depth_threshold_m is not None:
+        props[args.prop_flood_pct] = None
+
+    props[args.prop_risk_class] = classify_risk_r1_r4(r_out, risk_thr_tuple)
+    props[args.prop_mode] = "centroid"
+    return {"idx": idx, "feature": feature, "updated": True, "skipped": False}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(
         description="Enrich GeoJSON with LPERFECT flood depth/risk (mean+max + % area above depth threshold + risk class)."
@@ -315,6 +510,8 @@ def main() -> int:
     ap.add_argument("--prop-mode", default="risk_mode")
 
     ap.add_argument("--add-grid-idx", action="store_true")
+    ap.add_argument("--threads", type=int, default=0, help="Number of threads per rank (0 = auto).")
+    ap.add_argument("--disable-mpi", action="store_true", help="Disable MPI even if mpi4py is available.")
     ap.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"])
     args = ap.parse_args()
 
@@ -331,6 +528,12 @@ def main() -> int:
     to4326 = Transformer.from_crs(f"EPSG:{args.geojson_epsg}", "EPSG:4326", always_xy=True)
     to_area = Transformer.from_crs("EPSG:4326", f"EPSG:{args.area_epsg}", always_xy=True)
     back_to_4326 = Transformer.from_crs(f"EPSG:{args.area_epsg}", "EPSG:4326", always_xy=True)
+
+    comm, rank, world_size = _try_init_mpi(args.disable_mpi)
+    threads_per_rank = _calc_thread_workers(args.threads)
+    if rank == 0:
+        LOG.info("Parallel config: ranks=%d threads-per-rank=%d (MPI %s)", world_size, threads_per_rank,
+                 "enabled" if comm else "disabled")
 
     LOG.info("Opening NetCDF: %s", args.nc)
     ds = xr.open_dataset(args.nc)
@@ -356,168 +559,82 @@ def main() -> int:
     fill_risk = ds[RISK_NAME].attrs.get("_FillValue", None)
 
     LOG.info("Loading GeoJSON: %s", args.geojson_in)
-    gj = _load_geojson_feature_collection(args.geojson_in)
+    gj = _load_geojson_feature_collection(args.geojson_in) if rank == 0 else None
+
+    if comm is not None:
+        gj = comm.bcast(gj, root=0)
 
     feats = gj.get("features") or []
-    updated, skipped = 0, 0
 
-    LOG.info("Processing %d GeoJSON features", len(feats))
-    for feat in tqdm(feats, desc="Enriching features", unit="feature"):
-        g = feat.get("geometry")
-        if not g:
-            skipped += 1
-            continue
+    my_indices = list(range(rank, len(feats), world_size))
+    LOG.info("Rank %d handling %d features", rank, len(my_indices))
 
-        geom_src = shape(g)
-        if geom_src.is_empty:
-            skipped += 1
-            continue
+    results: List[Dict[str, Any]] = []
+    progress_disable = rank != 0
 
-        props = feat.get("properties")
-        if props is None or not isinstance(props, dict):
-            props = {}
-            feat["properties"] = props
-
-        if args.geojson_epsg != 4326:
-            geom_4326 = shp_transform(lambda x, y, z=None: to4326.transform(x, y), geom_src)
-        else:
-            geom_4326 = geom_src
-
-        if geom_4326.is_empty:
-            skipped += 1
-            continue
-
-        # ----- POINT: nearest sample -----
-        if isinstance(geom_4326, Point) and args.point_buffer_m <= 0:
-            lonp, latp = float(geom_4326.x), float(geom_4326.y)
-            ilat, ilon = nearest_ij(lat, lon, lat=latp, lon=lonp)
-
-            d = _as_float(flood2d.isel({LAT_NAME: ilat, LON_NAME: ilon}).values)
-            r = _as_float(risk2d.isel({LAT_NAME: ilat, LON_NAME: ilon}).values)
-
-            if _is_fill(d, fill_flood):
-                d = float("nan")
-            if _is_fill(r, fill_risk):
-                r = float("nan")
-
-            d_out = None if not _is_finite(d) else d
-            r_out = None if not _is_finite(r) else r
-
-            props[args.prop_flood_mean] = d_out
-            props[args.prop_flood_max] = d_out
-            props[args.prop_risk_mean] = r_out
-            props[args.prop_risk_max] = r_out
-
-            # percent not defined for pure point
-            if args.depth_threshold_m is not None:
-                props[args.prop_flood_pct] = None
-
-            # risk class
-            base_for_class = r_out
-            props[args.prop_risk_class] = classify_risk_r1_r4(base_for_class, risk_thr_tuple)
-
-            props[args.prop_mode] = "point"
-            if args.add_grid_idx:
-                props["_lperfect_ilat"] = ilat
-                props["_lperfect_ilon"] = ilon
-
-            updated += 1
-            continue
-
-        # ----- POINT buffered to area -----
-        if isinstance(geom_4326, Point) and args.point_buffer_m > 0:
-            geom_area = shp_transform(lambda x, y, z=None: to_area.transform(x, y), geom_4326).buffer(args.point_buffer_m)
-            geom_4326 = shp_transform(lambda x, y, z=None: back_to_4326.transform(x, y), geom_area)
-
-        # ----- LINE buffered to corridor -----
-        if isinstance(geom_4326, (LineString, MultiLineString)):
-            if args.line_buffer_m > 0:
-                geom_area = shp_transform(lambda x, y, z=None: to_area.transform(x, y), geom_4326).buffer(args.line_buffer_m)
-                geom_4326 = shp_transform(lambda x, y, z=None: back_to_4326.transform(x, y), geom_area)
-            else:
-                # centroid fallback
-                c = geom_4326.centroid
-                lonp, latp = float(c.x), float(c.y)
-                ilat, ilon = nearest_ij(lat, lon, lat=latp, lon=lonp)
-                d = _as_float(flood2d.isel({LAT_NAME: ilat, LON_NAME: ilon}).values)
-                r = _as_float(risk2d.isel({LAT_NAME: ilat, LON_NAME: ilon}).values)
-                if _is_fill(d, fill_flood):
-                    d = float("nan")
-                if _is_fill(r, fill_risk):
-                    r = float("nan")
-
-                d_out = None if not _is_finite(d) else d
-                r_out = None if not _is_finite(r) else r
-
-                props[args.prop_flood_mean] = d_out
-                props[args.prop_flood_max] = d_out
-                props[args.prop_risk_mean] = r_out
-                props[args.prop_risk_max] = r_out
-                if args.depth_threshold_m is not None:
-                    props[args.prop_flood_pct] = None
-
-                base_for_class = r_out
-                props[args.prop_risk_class] = classify_risk_r1_r4(base_for_class, risk_thr_tuple)
-
-                props[args.prop_mode] = "line_centroid"
-                updated += 1
-                continue
-
-        # ----- AREA: Polygon/MultiPolygon (and buffered point/line) -----
-        if isinstance(geom_4326, (Polygon, MultiPolygon)):
-            fmean, fmax, rmean, rmax, fpct = compute_area_stats(
-                geom_4326=geom_4326,
-                lat_edges=lat_edges,
-                lon_edges=lon_edges,
-                flood2d=flood2d,
-                risk2d=risk2d,
-                fill_flood=fill_flood,
-                fill_risk=fill_risk,
-                to_area_from4326=to_area,
-                depth_thr_m=args.depth_threshold_m,
+    if threads_per_rank > 1 and len(my_indices) > 0:
+        with ThreadPoolExecutor(max_workers=threads_per_rank) as ex:
+            futs = {
+                ex.submit(
+                    _process_feature,
+                    idx,
+                    feats[idx],
+                    args,
+                    lat=lat,
+                    lon=lon,
+                    lat_edges=lat_edges,
+                    lon_edges=lon_edges,
+                    flood2d=flood2d,
+                    risk2d=risk2d,
+                    fill_flood=fill_flood,
+                    fill_risk=fill_risk,
+                    to4326=to4326,
+                    to_area=to_area,
+                    back_to_4326=back_to_4326,
+                    risk_thr_tuple=risk_thr_tuple,
+                ): idx
+                for idx in my_indices
+            }
+            for fut in tqdm(as_completed(futs), total=len(futs), desc="Enriching features", unit="feature", disable=progress_disable):
+                results.append(fut.result())
+    else:
+        for idx in tqdm(my_indices, desc="Enriching features", unit="feature", disable=progress_disable):
+            results.append(
+                _process_feature(
+                    idx,
+                    feats[idx],
+                    args,
+                    lat=lat,
+                    lon=lon,
+                    lat_edges=lat_edges,
+                    lon_edges=lon_edges,
+                    flood2d=flood2d,
+                    risk2d=risk2d,
+                    fill_flood=fill_flood,
+                    fill_risk=fill_risk,
+                    to4326=to4326,
+                    to_area=to_area,
+                    back_to_4326=back_to_4326,
+                    risk_thr_tuple=risk_thr_tuple,
+                )
             )
 
-            props[args.prop_flood_mean] = fmean
-            props[args.prop_flood_max] = fmax
-            props[args.prop_risk_mean] = rmean
-            props[args.prop_risk_max] = rmax
+    gathered = [results]
+    if comm is not None:
+        gathered = comm.gather(results, root=0)
+        comm.Barrier()
+        if rank != 0:
+            return 0
 
-            if args.depth_threshold_m is not None:
-                props[args.prop_flood_pct] = fpct
-                props.setdefault("_depth_threshold_m", args.depth_threshold_m)
+    merged_results: List[Dict[str, Any]] = []
+    for chunk in gathered:
+        merged_results.extend(chunk)
 
-            # risk class based on chosen mode (default: max)
-            base_for_class = rmax if args.risk_class_mode == "max" else rmean
-            props[args.prop_risk_class] = classify_risk_r1_r4(base_for_class, risk_thr_tuple)
+    for res in merged_results:
+        feats[res["idx"]] = res["feature"]
 
-            props[args.prop_mode] = "area"
-            updated += 1
-            continue
-
-        # Other geometries -> centroid fallback
-        c = geom_4326.centroid
-        lonp, latp = float(c.x), float(c.y)
-        ilat, ilon = nearest_ij(lat, lon, lat=latp, lon=lonp)
-        d = _as_float(flood2d.isel({LAT_NAME: ilat, LON_NAME: ilon}).values)
-        r = _as_float(risk2d.isel({LAT_NAME: ilat, LON_NAME: ilon}).values)
-        if _is_fill(d, fill_flood):
-            d = float("nan")
-        if _is_fill(r, fill_risk):
-            r = float("nan")
-
-        d_out = None if not _is_finite(d) else d
-        r_out = None if not _is_finite(r) else r
-
-        props[args.prop_flood_mean] = d_out
-        props[args.prop_flood_max] = d_out
-        props[args.prop_risk_mean] = r_out
-        props[args.prop_risk_max] = r_out
-        if args.depth_threshold_m is not None:
-            props[args.prop_flood_pct] = None
-
-        props[args.prop_risk_class] = classify_risk_r1_r4(r_out, risk_thr_tuple)
-        props[args.prop_mode] = "centroid"
-        updated += 1
+    updated = sum(1 for r in merged_results if r["updated"])
+    skipped = sum(1 for r in merged_results if r["skipped"])
 
     LOG.info("Updated=%d skipped=%d total=%d", updated, skipped, len(feats))
 
