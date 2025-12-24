@@ -72,11 +72,11 @@ def default_config() -> Dict[str, Any]:  # define function default_config
                     "kind": "netcdf",  # execute statement
                     "path": "rain_time_dependent.nc",  # execute statement
                     "var": RAIN_RATE_VAR,  # execute statement
-                    "time_var": RAIN_TIME_VAR,  # execute statement
-                    "select": "nearest",  # execute statement
-                    "mode": "intensity_mmph",  # execute statement
-                    "weight": 1.0,  # execute statement
-                },  # execute statement
+                "time_var": RAIN_TIME_VAR,  # execute statement
+                "select": "previous",  # execute statement
+                "mode": "intensity_mmph",  # execute statement
+                "weight": 1.0,  # execute statement
+            },  # execute statement
             }  # execute statement
         },  # execute statement
         "risk": {  # execute statement

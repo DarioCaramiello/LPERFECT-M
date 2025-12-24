@@ -38,13 +38,13 @@
     "sources": {
       "rain": {
         "kind": "netcdf",
-        "path": "rain_time_dependent.nc",
-        "var": "rain_rate",
-        "time_var": "time",
-        "select": "nearest",
-        "mode": "intensity_mmph",
-        "weight": 1.0
-      }
+      "path": "rain_time_dependent.nc",
+      "var": "rain_rate",
+      "time_var": "time",
+      "select": "previous",
+      "mode": "intensity_mmph",
+      "weight": 1.0
+    }
     }
   },
   "risk": {

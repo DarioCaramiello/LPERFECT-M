@@ -262,26 +262,26 @@ forcing files (see `cdl/rain_time_dependent.cdl`).
 | `rate_units` | `mm h-1` | Rain rate units. | `"rate_units": "mm h-1"` |
 | `require_cf` | `true` | Enforce CF validation for this source. | `"require_cf": true` |
 | `require_time_dim` | `true` | Require time dimension for this source. | `"require_time_dim": true` |
-| `select` | `nearest` | How to choose a time slice: `nearest` (by timestamp) or `step` (by index). | `"select": "step"` |
+| `select` | `previous` | How to choose a time slice: `previous`/`floor` (use the latest time ≤ simulation time), `nearest` (by timestamp midpoint), or `step` (by index). | `"select": "nearest"` |
 | `value` | `null` | Scalar intensity/depth (required when `kind = scalar`). | `"value": 2.5` |
 
 **NetCDF source example:**
 
 ```json
 {
-  "rain": {
-    "sources": {
-      "rain": {
-        "kind": "netcdf",
-        "path": "rain_time_dependent.nc",
-        "var": "rain_rate",
-        "time_var": "time",
-        "select": "nearest",
-        "mode": "intensity_mmph",
-        "weight": 1.0
-      }
-    }
-  }
+        "rain": {
+          "sources": {
+            "rain": {
+              "kind": "netcdf",
+              "path": "rain_time_dependent.nc",
+              "var": "rain_rate",
+              "time_var": "time",
+              "select": "previous",
+              "mode": "intensity_mmph",
+              "weight": 1.0
+            }
+          }
+        }
 }
 ```
 
@@ -305,7 +305,8 @@ forcing files (see `cdl/rain_time_dependent.cdl`).
 **Notes:**
 
 - A 2D variable is treated as time-invariant; a 3D variable must have a time dimension.
-- `select = "nearest"` requires `model.start_time` (otherwise time selection falls back to step index).
+- `select = "previous"` (default) holds each rain rate constant until the next timestamp, which avoids mid-interval switches when your model `dt_s` is smaller than the rain timestep.
+- `select = "nearest"` requires `model.start_time` (otherwise time selection falls back to step index) and switches at the midpoint between rain timestamps.
 - All rain fields must match the domain grid shape.
 - With `require_cf = true`, inputs must comply with `cdl/rain_time_dependent.cdl`.
 
