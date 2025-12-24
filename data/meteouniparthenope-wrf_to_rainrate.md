@@ -1,4 +1,4 @@
-# `convert_wrf_rain_to_rain_time_dependent.py`
+# meteo@uniparthenope to rain rate
 
 This script converts **one or many** WRF-derived NetCDF files (e.g. `wrf5_d02_*.nc`) into a **single merged time series** NetCDF compliant with a simplified `cdl/rain_time_dependent.cdl` schema.
 
