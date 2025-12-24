@@ -342,7 +342,7 @@ def main() -> int:
     lat_edges = grid_edges_from_centers(lat)
     lon_edges = grid_edges_from_centers(lon)
 
-    tsize = int(ds.dims.get(TIME_NAME, 0))
+    tsize = int(ds.sizes.get(TIME_NAME, 0))
     if tsize <= 0:
         raise ValueError("Invalid time dimension size.")
     if not (0 <= args.time_index < tsize):
