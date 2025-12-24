@@ -100,6 +100,18 @@ python utils/output_to_geo.py \
   --depth-threshold-m 0.10
 ```
 
+### Parallel (MPI + threads)
+
+```bash
+mpirun -n 4 python utils/output_to_geo.py \
+  --nc output_flood_depth.nc \
+  --geojson-in assets.geojson \
+  --geojson-out assets_with_risk.geojson \
+  --threads 8
+```
+
+This launches 4 ranks (distributed) and 8 threads **per rank** (shared memory). Adjust `--threads` to `1` for thread-free per-rank processing or add `--disable-mpi` to force a single-rank run even when `mpi4py` is installed.
+
 ---
 
 ## Command-line reference
@@ -137,6 +149,13 @@ You can rename output property keys:
 ### Debugging
 - `--add-grid-idx` (flag): for point sampling, store nearest `_lperfect_ilat`, `_lperfect_ilon`
 - `--log-level {DEBUG,INFO,WARNING,ERROR}` (default `INFO`)
+- `--threads N` (default `0`, auto): number of threads **per MPI rank** for feature processing. Set to `1` to keep processing strictly sequential on each rank.
+- `--disable-mpi` (flag): force-disable MPI even if `mpi4py` is installed.
+
+### Parallel execution (hierarchical)
+- **Distributed (MPI)**: if `mpi4py` is available and you launch via `mpirun -n RANKS ...`, the feature collection is split across ranks. Each rank works independently and only rank 0 writes the output GeoJSON.
+- **Shared-memory (threads)**: within each rank, features are processed with a thread pool (`--threads`). This accelerates intersection-heavy polygon workloads without changing output.
+- **Sequential**: run without `mpirun` **and** set `--threads 1` (or leave defaults when only one CPU core is available) to keep execution single-threaded and single-rank.
 
 ---
 
@@ -184,6 +203,7 @@ You can rename output property keys:
   - Prefer simpler geometries (simplify upstream if needed)
   - Use `--line-buffer-m` to convert lines to corridors (still polygonal but avoids centroid underestimation)
   - Consider splitting very large FeatureCollections into chunks and processing them in parallel
+  - For heavy workloads, combine **MPI ranks** (`mpirun -n ...`) with per-rank `--threads` to leverage both distributed memory and shared memory parallelism.
 
 ---
 
