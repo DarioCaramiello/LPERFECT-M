@@ -4,7 +4,7 @@
 LPERFECT is a lightweight **Lagrangian runoff + flood routing model** designed for fast flood screening on gridded domains.
 It is engineered to be **restartable**, **MPI-parallel** (row-slab + particle migration), and **production-ready** from a software-architecture point of view (modular package layout, clear separation of concerns).
 
-![December 23rd, 2023, intense rain event in Italy](docs/figures/Figure_3.png)
+![December 23rd, 2023, intense rain event in Italy](docs/figures/Figure_1.png)
 
 LPERFECT fits naturally in the **Hi-WeFAI** workflow, where blended precipitation forcing (radar nowcasting, stations, NWP)
 feeds a fast impact layer producing flood depth and risk maps.
@@ -179,5 +179,7 @@ plt.show()
 
 ## Use case
 ### Italy, December 23rd 2025 intense rain event
+
+![December 23rd, 2023, intense rain event in Italy](docs/figures/Figure_3.png)
 
 A complete, reproducible workflow (data download, radar-to-rain conversion, configuration, run, and visualization) is documented in [docs/use_case_01.md](docs/use_case_01.md).
