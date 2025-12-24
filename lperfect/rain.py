@@ -52,7 +52,7 @@ class RainSource:  # define class RainSource
     rate_units: str = RAIN_RATE_UNITS  # execute statement
     require_cf: bool = True  # execute statement
     require_time_dim: bool = True  # execute statement
-    select: str = "nearest"  # execute statement
+    select: str = "previous"  # execute statement
     value: Optional[float] = None  # execute statement
 
 
@@ -103,7 +103,7 @@ def build_rain_sources(cfg: Dict[str, Any]) -> List[RainSource]:  # define funct
             rate_units=str(sc.get("rate_units", schema_cfg.get("rate_units", RAIN_RATE_UNITS))),  # set rate_units
             require_cf=bool(sc.get("require_cf", schema_cfg.get("require_cf", True))),  # set require_cf
             require_time_dim=bool(sc.get("require_time_dim", schema_cfg.get("require_time_dim", True))),  # set require_time_dim
-            select=str(sc.get("select", "nearest")),  # set select
+            select=str(sc.get("select", "previous")),  # set select
             value=sc.get("value", None),  # set value
         ))  # execute statement
     return out  # return out
@@ -255,7 +255,13 @@ def blended_rain_step_mm_rank0(  # define function blended_rain_step_mm_rank0
                         time_vals = None  # set time_vals
                 else:  # fallback branch
                     time_vals = _decode_cf_time_axis(ds, src)  # set time_vals
-                    it = pick_time_index(time_vals, sim_time)  # set it
+                    if src.select == "nearest":  # check condition src.select == "nearest":
+                        it = pick_time_index(time_vals, sim_time)  # set it
+                    elif src.select in {"previous", "floor"}:  # check alternate condition src.select in {"previous", "floor"}:
+                        it = int(np.searchsorted(time_vals, sim_time, side="right") - 1)  # set it
+                        it = int(np.clip(it, 0, time_vals.size - 1))  # set it
+                    else:  # fallback branch
+                        raise ValueError(f"Unknown rain selection mode '{src.select}' for '{src.name}'")  # raise ValueError(f"Unknown rain selection mode '{src.select}' for '{src.name}'")
                 _log_rain_time_usage(src, time_vals, it)  # execute statement
                 field = np.asarray(da.isel({tdim: it}).values)  # set field
             else:  # fallback branch

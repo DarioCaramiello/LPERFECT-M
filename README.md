@@ -98,8 +98,9 @@ Rainfall files also include a `crs` grid-mapping variable, and `rain_rate` shoul
 reference it via `grid_mapping = "crs"`.
 
 Time selection:
-- `nearest`: pick the time slice closest to simulation timestamp (`model.start_time` + elapsed)
-- `step`: pick `time[k]` by index
+- `previous` (default): pick the latest time slice **at or before** the simulation timestamp. Use this to hold a 10-minute rain rate constant across all 5-second model steps.
+- `nearest`: pick the time slice closest to simulation timestamp (`model.start_time` + elapsed); switches at the midpoint between rain timestamps.
+- `step`: pick `time[k]` by index.
 
 ## Model description
 
