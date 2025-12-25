@@ -12,3 +12,8 @@ The top-level executable is `main.py` (in the project root).
 # Expose a version string for provenance (optional, but convenient).
 __version__ = "1.0.0"  # set __version__
 RAIN_SCHEMA_DOC = "cdl/rain_time_dependent.cdl"  # execute statement
+
+# Convenience exports for callers that import from the package root.
+from .simulation import run_simulation, run_nested_simulations  # noqa: E402
+
+__all__ = ["run_simulation", "run_nested_simulations", "__version__", "RAIN_SCHEMA_DOC"]
