@@ -125,7 +125,7 @@ def main() -> None:
     from lperfect.domain import read_domain_netcdf_rank0, bcast_domain
 
     # Import simulation driver.
-    from lperfect.simulation import run_simulation, run_nested_simulations
+    from lperfect.simulation import run_simulation
 
     # Import rain cache close.
     from lperfect.rain import xr_close_cache
