@@ -125,10 +125,12 @@ def main() -> None:
     from lperfect.domain import read_domain_netcdf_rank0, bcast_domain
 
     # Import simulation driver.
-    from lperfect.simulation import run_simulation
+    from lperfect.simulation import run_simulation, run_nested_simulations
 
     # Import rain cache close.
     from lperfect.rain import xr_close_cache
+    # Import shared-memory config helper.
+    from lperfect.shared_memory import SharedMemoryConfig
     # Initialize MPI or fall back to a serial communicator.
     comm, rank, size = get_comm()
 

@@ -4,8 +4,10 @@
 # NOTE: Rain NetCDF inputs follow cdl/rain_time_dependent.cdl (CF-1.10).
 
 # Import typing primitives.
-from typing import Any, Dict  # import typing import Any, Dict
+from typing import Any, Dict, Iterable, List, Optional  # import typing import Any, Dict, Iterable, List, Optional
 from collections import Counter, defaultdict  # import collections import Counter, defaultdict
+# Import dataclasses.
+from dataclasses import dataclass  # import dataclasses import dataclass
 
 # Import logging.
 import logging  # import logging
@@ -581,7 +583,7 @@ def run_simulation(
         total_spawned_particles += new_particles
 
         # Advect particles.
-        particles, outflow_vol_local, nhops_local, outflow_points_local = advect_particles_one_step(  # set particles, outflow_vol_local, nhops_local, outflow_points_local
+        particles, outflow_vol_local, nhops_local, outflow_points_local, outflow_particles_local = advect_particles_one_step(  # set particles, outflow_vol_local, nhops_local, outflow_points_local, outflow_particles_local
             particles=particles,  # set particles
             valid=valid,  # set valid
             ds_r=ds_r,  # set ds_r
@@ -593,6 +595,7 @@ def run_simulation(
             outflow_sink=outflow_sink,  # set outflow_sink
             shared_cfg=shared_cfg,  # set shared_cfg
             track_outflow_points=record_outflow_points,  # set track_outflow_points
+            return_outflow_particles=True,  # set return_outflow_particles
         )  # execute statement
 
         # Migrate particles between slabs (MPI).
