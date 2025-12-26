@@ -26,6 +26,7 @@ Project website: https://www.hiwefai-project.org
   - Converting a VMI radar image to rain rate stored in a NetCDF file [`link`](docs/wr_to_rain.md)
   - Map model results on geographical features (i.e., municipality areas) [`link`](docs/output_to_geo.md)
   - Rise alert notification in case of threshold overpassing [`link`](docs/alert_generator.md)
+  - Running the model on Slurm HPC systems [`link`](docs/hpc.md)
 
 ## Installation
 
@@ -166,18 +167,15 @@ Results NetCDF contains:
 
 Example plot:
 ```python
-import xarray as xr
-import matplotlib.pyplot as plt
-
-ds = xr.open_dataset("flood_depth.nc")
-ds["flood_depth"].isel(time=0).plot()
-plt.title("Flood depth (m)")
-plt.show()
-
-ds["risk_index"].isel(time=0).plot()
-plt.title("Risk index")
-plt.show()
+python utils/output_plot.py \\
+  --flood-nc flood_depth.nc \\
+  --dem-nc domain.nc \\
+  --out-png flood_depth_t0.png \\
+  --time-index 0 \\
+  --log-level INFO
 ```
+
+The script can also batch-render every time step by omitting `--time-index`, optionally regrid to align DEM/flood grids (`--regrid dem_to_flood` or `--regrid flood_to_dem`), and overlay administrative boundaries when `geopandas` is installed (e.g., `--overlay-vectors muni.geojson`).
 
 ## Use case
 ### Italy, December 23rd 2025 intense rain event
