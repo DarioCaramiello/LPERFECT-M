@@ -1,30 +1,34 @@
 netcdf output_flood_depth {
+
 :Conventions = "CF-1.10";
-:title = "LPERFECT flood depth + hydrogeological risk index";
+:title = "LPERFECT flood depth and hydrogeological risk index";
 :institution = "{{institution}}";
 :source = "LPERFECT";
 :history = "{{ISO-8601 timestamp}}: results written by LPERFECT";
 :lperfect_config_json = "{{minified_config_json}}";
+:inundation_threshold_m = {{inundation_threshold_m}}; // e.g. 0.01
 
 dimensions:
-  time = 1;
+  time = UNLIMITED;
   latitude = {{Ny}};
   longitude = {{Nx}};
 
 variables:
 
-  int time(time=1);
-      :description = "Time";
-      :long_name = "time";
-      :units = "hours since 1900-01-01 00:00:0.0";
+  // ----------------------------
+  // Coordinates
+  // ----------------------------
+
+  double time(time);
+    time:long_name = "time";
+    time:units = "hours since 1900-01-01 00:00:00";
+    time:calendar = "gregorian";
 
   float latitude(latitude);
-    latitude:description = "Latitude";
     latitude:long_name = "latitude";
     latitude:units = "degrees_north";
 
   float longitude(longitude);
-    longitude:description = "Longitude";
     longitude:long_name = "longitude";
     longitude:units = "degrees_east";
 
@@ -32,16 +36,47 @@ variables:
     crs:grid_mapping_name = "{{grid_mapping_name}}";
     crs:epsg_code = "{{EPSG:xxxx}}";
 
+  // ----------------------------
+  // Core flood outputs
+  // ----------------------------
+
   float flood_depth(time, latitude, longitude);
     flood_depth:standard_name = "water_depth";
-    flood_depth:long_name = "flooded_water_depth";
+    flood_depth:long_name = "Flood water depth";
     flood_depth:units = "m";
     flood_depth:grid_mapping = "crs";
     flood_depth:_FillValue = {{fill_value}};
 
   float risk_index(time, latitude, longitude);
-    risk_index:long_name = "hydrogeological_risk_index";
+    risk_index:long_name = "Hydrogeological risk index";
     risk_index:units = "1";
     risk_index:grid_mapping = "crs";
     risk_index:_FillValue = {{fill_value}};
+
+  // ----------------------------
+  // Minimal derived products
+  // ----------------------------
+
+  byte inundation_mask(time, latitude, longitude);
+    inundation_mask:long_name = "Inundation mask (1=inundated, 0=dry)";
+    inundation_mask:units = "1";
+    inundation_mask:flag_values = 0b, 1b;
+    inundation_mask:flag_meanings = "dry inundated";
+    inundation_mask:threshold_depth_m = {{inundation_threshold_m}};
+    inundation_mask:grid_mapping = "crs";
+
+  float flood_depth_max(latitude, longitude);
+    flood_depth_max:long_name = "Maximum flood water depth over simulation";
+    flood_depth_max:units = "m";
+    flood_depth_max:grid_mapping = "crs";
+    flood_depth_max:_FillValue = {{fill_value}};
+
+  byte inundation_mask_max(latitude, longitude);
+    inundation_mask_max:long_name = "Ever inundated during simulation";
+    inundation_mask_max:units = "1";
+    inundation_mask_max:flag_values = 0b, 1b;
+    inundation_mask_max:flag_meanings = "never_inundated inundated";
+    inundation_mask_max:threshold_depth_m = {{inundation_threshold_m}};
+    inundation_mask_max:grid_mapping = "crs";
+
 }
