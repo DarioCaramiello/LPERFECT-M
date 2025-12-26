@@ -2,7 +2,7 @@
 """
 utils/output_to_geo.py
 
-LPERFECT NetCDF (cdl/output_flood_depth.cdl) -> GeoJSON enrichment:
+LPERFECT NetCDF (cdl/output.cdl) -> GeoJSON enrichment:
 - flood_depth_mean, flood_depth_max
 - risk_index_mean, risk_index_max
 - flood_depth_pct_gt_thr  (% area where flood_depth > threshold)

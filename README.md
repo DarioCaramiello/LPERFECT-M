@@ -165,6 +165,8 @@ MPI restarts:
 Results NetCDF contains:
 - `flood_depth(time,latitude,longitude)` in meters
 - `risk_index(time,latitude,longitude)` unitless (if enabled)
+- `inundation_mask(time,latitude,longitude)` (0/1, thresholded depth)
+- `flood_depth_max(latitude,longitude)` and `inundation_mask_max(latitude,longitude)`
 - `time(time)` coordinate (hours since 1900-01-01 00:00:0.0)
 
 Example plot (with optional Campania bounding box and labeled municipal boundaries):

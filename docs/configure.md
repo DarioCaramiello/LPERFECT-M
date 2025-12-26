@@ -443,6 +443,8 @@ Controls final NetCDF output metadata and paths.
 | `output.Conventions` | `CF-1.10` | CF metadata convention string. | `"Conventions": "CF-1.8"` |
 | `output.title` | `LPERFECT flood depth + hydrogeological risk index` | Global title attribute. | `"title": "LPERFECT flood run"` |
 | `output.institution` | `UniParthenope` | Global institution attribute. | `"institution": "My Lab"` |
+| `output.inundation_threshold_m` | `0.01` | Depth (m) used to derive `inundation_mask` and `inundation_mask_max`. | `"inundation_threshold_m": 0.05` |
+| `output.fill_value` | `-9999.0` | `_FillValue` applied to float outputs (`flood_depth`, `risk_index`, `flood_depth_max`). | `"fill_value": -32767.0` |
 
 > Configure **either** `save_every_s` **or** `rotate_every_s` (not both). The final state is always written even if it does not land exactly on the requested cadence.
 > At the end of each run, a simulation quality report is logged automatically (no configuration needed), covering mass balance and hydrological checks.

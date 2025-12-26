@@ -1,6 +1,6 @@
 # `utils/output_to_geo.py` — LPERFECT NetCDF → GeoJSON enrichment
 
-This utility reads the **LPERFECT** NetCDF output compliant with `cdl/output_flood_depth.cdl` and enriches a **GeoJSON FeatureCollection** with per-feature flood/risk metrics.
+This utility reads the **LPERFECT** NetCDF output compliant with `cdl/output.cdl` and enriches a **GeoJSON FeatureCollection** with per-feature flood/risk metrics.
 
 It is designed to support **point** and **non-point** features:
 - **Points**: nearest-neighbor sampling on the NetCDF grid (or optional point buffering to treat points as small areas).
