@@ -54,6 +54,89 @@ srun --mpi=pmix_v3 python main.py --config "${CONFIG}" --out-nc "${OUTDIR}/flood
 
 Adjust the `#SBATCH` directives and the final `srun` line according to the modes below.
 
+### Quick `sbatch` examples
+
+**Single-node CPU (1 task):**
+
+```bash
+cat > job_cpu.sh <<'EOF'
+#!/bin/bash
+#SBATCH --job-name=lperfect-cpu
+#SBATCH --time=01:00:00
+#SBATCH --partition=compute
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=4
+#SBATCH --gres=gpu:0
+#SBATCH --output=logs/%x-%j.out
+
+module purge
+module load python/3.11
+CONFIG=/shared/config.json
+OUTDIR=/shared/outputs
+mkdir -p "${OUTDIR}" logs
+
+export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
+srun python main.py --config "${CONFIG}" --out-nc "${OUTDIR}/flood_depth.nc"
+EOF
+
+sbatch job_cpu.sh
+```
+
+**Single-node MPI (4 ranks):**
+
+```bash
+cat > job_mpi.sh <<'EOF'
+#!/bin/bash
+#SBATCH --job-name=lperfect-mpi
+#SBATCH --time=01:00:00
+#SBATCH --partition=compute
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=4
+#SBATCH --cpus-per-task=1
+#SBATCH --gres=gpu:0
+#SBATCH --output=logs/%x-%j.out
+
+module purge
+module load python/3.11
+module load openmpi/4.1
+CONFIG=/shared/config.json
+OUTDIR=/shared/outputs
+mkdir -p "${OUTDIR}" logs
+
+srun --mpi=pmix_v3 python main.py --config "${CONFIG}" --out-nc "${OUTDIR}/flood_depth.nc"
+EOF
+
+sbatch job_mpi.sh
+```
+
+**GPU (one GPU per task):**
+
+```bash
+cat > job_gpu.sh <<'EOF'
+#!/bin/bash
+#SBATCH --job-name=lperfect-gpu
+#SBATCH --time=01:00:00
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=2
+#SBATCH --gpus-per-task=1
+#SBATCH --output=logs/%x-%j.out
+
+module purge
+module load python/3.11
+module load cuda/12.2
+CONFIG=/shared/config.json
+OUTDIR=/shared/outputs
+mkdir -p "${OUTDIR}" logs
+
+srun --mpi=pmix_v3 python main.py --config "${CONFIG}" --device gpu --out-nc "${OUTDIR}/flood_depth.nc"
+EOF
+
+sbatch job_gpu.sh
+```
+
 ---
 
 ## Execution modes
