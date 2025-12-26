@@ -92,7 +92,9 @@
     "outflow_geojson": null,
     "Conventions": "CF-1.10",
     "title": "LPERFECT flood depth + hydrogeological risk index",
-    "institution": "UniParthenope"
+    "institution": "UniParthenope",
+    "inundation_threshold_m": 0.01,
+    "fill_value": -9999.0
   },
   "compute": {
     "device": "cpu"

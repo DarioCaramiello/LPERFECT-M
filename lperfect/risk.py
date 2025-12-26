@@ -51,13 +51,27 @@ def compute_flow_accum_area_m2(d8: np.ndarray, encoding: str, cell_area_m2: floa
 
 def robust_normalize(a: np.ndarray, mask: np.ndarray, p_low: float, p_high: float) -> np.ndarray:  # define function robust_normalize
     """Robust normalization to [0,1] using percentiles."""  # execute statement
-    x = np.where(mask, a, np.nan).astype(np.float64)  # set x
-    lo = np.nanpercentile(x, p_low)  # set lo
-    hi = np.nanpercentile(x, p_high)  # set hi
-    if not np.isfinite(lo) or not np.isfinite(hi) or hi <= lo:  # check condition not np.isfinite(lo) or not np.isfinite(hi) or hi <= lo:
+    x = np.asarray(a, dtype=np.float64)  # set x
+    valid = mask & np.isfinite(x)  # set valid
+    if not np.any(valid):  # check condition not np.any(valid):
         return np.where(mask, 0.0, np.nan)  # return np.where(mask, 0.0, np.nan)
+
+    x_masked = np.where(valid, x, np.nan)  # set x_masked
+    lo = np.nanpercentile(x_masked, p_low)  # set lo
+    hi = np.nanpercentile(x_masked, p_high)  # set hi
+
+    if (not np.isfinite(lo)) or (not np.isfinite(hi)) or hi <= lo:  # check condition (not np.isfinite(lo)) or (not np.isfinite(hi)) or hi <= lo:
+        positives = x_masked[x_masked > 0.0]  # set positives
+        if positives.size == 0:  # check condition positives.size == 0:
+            return np.where(mask, 0.0, np.nan)  # return np.where(mask, 0.0, np.nan)
+        lo = np.nanpercentile(positives, p_low)  # set lo
+        hi = np.nanpercentile(positives, p_high)  # set hi
+
+    if (not np.isfinite(lo)) or (not np.isfinite(hi)) or hi <= lo:  # check condition (not np.isfinite(lo)) or (not np.isfinite(hi)) or hi <= lo:
+        return np.where(mask, 0.0, np.nan)  # return np.where(mask, 0.0, np.nan)
+
     y = (x - lo) / (hi - lo)  # set y
-    return np.where(mask, np.clip(y, 0.0, 1.0), np.nan)  # return np.where(mask, np.clip(y, 0.0, 1.0), np.nan)
+    return np.where(valid, np.clip(y, 0.0, 1.0), np.nan)  # return np.where(valid, np.clip(y, 0.0, 1.0), np.nan)
 
 
 def compute_risk_index(runoff_cum_mm: np.ndarray, flow_accum_m2: np.ndarray, active_mask: np.ndarray,  # define function compute_risk_index
