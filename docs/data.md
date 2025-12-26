@@ -6,7 +6,7 @@ This document describes **how to prepare all input datasets** required by **LPER
 - `cdl/rain_time_dependent.cdl` (required rain forcing schema)
 - `cdl/rain_static.cdl` (optional, requires relaxing `rain.schema.require_time_dim`)
 - `cdl/rain_bundle_optional.cdl` (optional, same requirement)
-- `cdl/output_flood_depth.cdl`
+- `cdl/output.cdl`
 - `cdl/restart_state.cdl`
 
 LPERFECT **only uses NetCDF inputs** and follows **CF-1.10 conventions** to ensure interoperability, reproducibility, and long-term maintainability.
@@ -226,11 +226,14 @@ expected structure for post-processing and validation.
 
 ### 5.1 Flood Depth Output (`output_flood_depth.nc`)
 
-**Reference specification:** `cdl/output_flood_depth.cdl`
+**Reference specification:** `cdl/output.cdl`
 
 Expected variables:
 - `flood_depth(time,latitude,longitude)` in meters
 - `risk_index(time,latitude,longitude)` dimensionless
+- `inundation_mask(time,latitude,longitude)` (0/1, with `threshold_depth_m`)
+- `flood_depth_max(latitude,longitude)` maximum depth over the simulation
+- `inundation_mask_max(latitude,longitude)` ever inundated flag (0/1)
 - `time(time)` coordinate in `hours since 1900-01-01 00:00:0.0`
 
 When `output.save_every_s > 0`, the model **appends** a new `time` slice to the
@@ -239,7 +242,9 @@ same NetCDF on the requested cadence (final state is always written). If
 `output.out_netcdf` basename with `_0000.nc`, `_0001.nc`, … suffixes.
 
 The output includes a `crs` grid-mapping variable (`grid_mapping_name`, `epsg_code`)
-referenced by `flood_depth` and `risk_index`.
+referenced by `flood_depth`, `risk_index`, `inundation_mask`, `flood_depth_max`,
+and `inundation_mask_max`. The global attribute `inundation_threshold_m` records
+the depth (meters) used for the inundation masks.
 
 ### 5.2 Restart State (`restart_state.nc`)
 

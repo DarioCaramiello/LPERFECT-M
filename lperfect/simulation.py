@@ -173,10 +173,13 @@ def run_simulation(
     output_file_initialized = False  # set output_file_initialized
     rotation_index = 0  # set rotation_index
     next_output_s: float | None = None  # set next_output_s
+    inundation_threshold_m = float(output_cfg.get("inundation_threshold_m", 0.01))  # set inundation_threshold_m
 
     risk_cfg = cfg.get("risk", {})  # set risk_cfg
     do_risk = bool(risk_cfg.get("enabled", True))  # set do_risk
     risk_accum = None  # set risk_accum
+    flood_depth_max = np.where(dom.active_mask, 0.0, np.nan).astype(np.float64)  # set flood_depth_max
+    inundation_mask_max = np.where(dom.active_mask, 0, 0).astype(np.int8)  # set inundation_mask_max
 
     # ------------------------------
     # Initialize state (possibly from restart)
@@ -338,6 +341,16 @@ def run_simulation(
         time_hours = _output_time_hours(elapsed_s)
         flood_depth, risk_field = _gather_outputs_for_rank0()
         if rank == 0 and flood_depth is not None and risk_field is not None:
+            inundation_mask = np.where(
+                dom.active_mask & np.isfinite(flood_depth) & (flood_depth >= inundation_threshold_m), 1, 0
+            ).astype(np.int8)
+            nonlocal flood_depth_max, inundation_mask_max
+            current_max = np.where(np.isfinite(flood_depth_max), flood_depth_max, -np.inf)
+            new_vals = np.where(np.isfinite(flood_depth), flood_depth, -np.inf)
+            combined_max = np.maximum(current_max, new_vals)
+            flood_depth_max = np.where(dom.active_mask, np.where(combined_max == -np.inf, np.nan, combined_max), np.nan)
+            inundation_mask_max = np.where((inundation_mask_max == 1) | (inundation_mask == 1), 1, 0).astype(np.int8)
+
             logger.info(
                 "Adding output time slice at t=%.3fs (%.3f h) to %s",
                 float(elapsed_s),
@@ -350,6 +363,9 @@ def run_simulation(
                 dom,
                 flood_depth,
                 risk_field,
+                inundation_mask,
+                flood_depth_max,
+                inundation_mask_max,
                 time_hours=time_hours,
                 mode=mode,
             )

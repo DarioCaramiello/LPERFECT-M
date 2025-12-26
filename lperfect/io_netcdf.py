@@ -38,10 +38,21 @@ def _coord_attrs(name: str) -> Dict[str, str]:  # define function _coord_attrs
     return {}  # return {}
 
 
-def write_results_netcdf_rank0(out_path: str, cfg: Dict[str, Any], dom: Domain,  # define function write_results_netcdf_rank0
-                              flood_depth_m: np.ndarray, risk_index: np.ndarray, time_hours: float, mode: str = "w") -> None:  # execute statement
+def write_results_netcdf_rank0(
+    out_path: str,
+    cfg: Dict[str, Any],
+    dom: Domain,
+    flood_depth_m: np.ndarray,
+    risk_index: np.ndarray,
+    inundation_mask: np.ndarray,
+    flood_depth_max: np.ndarray,
+    inundation_mask_max: np.ndarray,
+    time_hours: float,
+    mode: str = "w",
+) -> None:  # execute statement
     """Write results in CF-friendly NetCDF (append-safe on time axis)."""  # execute statement
     out_cfg = cfg.get("output", {})  # set out_cfg
+    inundation_threshold_m = float(out_cfg.get("inundation_threshold_m", 0.01))  # set inundation_threshold_m
 
     ds = xr.Dataset()  # set ds
     fill_value = float(out_cfg.get("fill_value", -9999.0))  # set fill_value
@@ -59,7 +70,7 @@ def write_results_netcdf_rank0(out_path: str, cfg: Dict[str, Any], dom: Domain, 
         dims=("time", dom.y_name, dom.x_name),  # set dims
         attrs={  # set attrs
             "standard_name": "water_depth",  # execute statement
-            "long_name": "flooded_water_depth",  # execute statement
+            "long_name": "Flood water depth",  # execute statement
             "units": "m",  # execute statement
         },  # execute statement
     )  # execute statement
@@ -68,8 +79,41 @@ def write_results_netcdf_rank0(out_path: str, cfg: Dict[str, Any], dom: Domain, 
         risk_index.astype(np.float32)[None, ...],  # execute statement
         dims=("time", dom.y_name, dom.x_name),  # set dims
         attrs={  # set attrs
-            "long_name": "hydrogeological_risk_index",  # execute statement
+            "long_name": "Hydrogeological risk index",  # execute statement
             "units": "1",  # execute statement
+        },  # execute statement
+    )  # execute statement
+
+    ds["inundation_mask"] = xr.DataArray(  # execute statement
+        inundation_mask.astype(np.int8)[None, ...],  # execute statement
+        dims=("time", dom.y_name, dom.x_name),  # set dims
+        attrs={  # set attrs
+            "long_name": "Inundation mask (1=inundated, 0=dry)",  # execute statement
+            "units": "1",  # execute statement
+            "flag_values": np.array([0, 1], dtype=np.int8),  # execute statement
+            "flag_meanings": "dry inundated",  # execute statement
+            "threshold_depth_m": inundation_threshold_m,  # execute statement
+        },  # execute statement
+    )  # execute statement
+
+    ds["flood_depth_max"] = xr.DataArray(  # execute statement
+        flood_depth_max.astype(np.float32),  # execute statement
+        dims=(dom.y_name, dom.x_name),  # set dims
+        attrs={  # set attrs
+            "long_name": "Maximum flood water depth over simulation",  # execute statement
+            "units": "m",  # execute statement
+        },  # execute statement
+    )  # execute statement
+
+    ds["inundation_mask_max"] = xr.DataArray(  # execute statement
+        inundation_mask_max.astype(np.int8),  # execute statement
+        dims=(dom.y_name, dom.x_name),  # set dims
+        attrs={  # set attrs
+            "long_name": "Ever inundated during simulation",  # execute statement
+            "units": "1",  # execute statement
+            "flag_values": np.array([0, 1], dtype=np.int8),  # execute statement
+            "flag_meanings": "never_inundated inundated",  # execute statement
+            "threshold_depth_m": inundation_threshold_m,  # execute statement
         },  # execute statement
     )  # execute statement
 
@@ -78,6 +122,9 @@ def write_results_netcdf_rank0(out_path: str, cfg: Dict[str, Any], dom: Domain, 
         ds[gm] = xr.DataArray(0, attrs=dom.grid_mapping_attrs)  # execute statement
         ds["flood_depth"].attrs["grid_mapping"] = gm  # execute statement
         ds["risk_index"].attrs["grid_mapping"] = gm  # execute statement
+        ds["inundation_mask"].attrs["grid_mapping"] = gm  # execute statement
+        ds["flood_depth_max"].attrs["grid_mapping"] = gm  # execute statement
+        ds["inundation_mask_max"].attrs["grid_mapping"] = gm  # execute statement
 
     ds.attrs["title"] = out_cfg.get("title", "LPERFECT flood depth + hydrogeological risk index")  # execute statement
     ds.attrs["institution"] = out_cfg.get("institution", "")  # execute statement
@@ -85,8 +132,16 @@ def write_results_netcdf_rank0(out_path: str, cfg: Dict[str, Any], dom: Domain, 
     ds.attrs["history"] = f"{utc_now_iso()}: results written by LPERFECT"  # execute statement
     ds.attrs["Conventions"] = out_cfg.get("Conventions", CF_CONVENTIONS)  # execute statement
     ds.attrs["lperfect_config_json"] = json.dumps(cfg, separators=(",", ":"), sort_keys=True)  # execute statement
+    ds.attrs["inundation_threshold_m"] = inundation_threshold_m  # execute statement
 
-    to_netcdf_kwargs: Dict[str, Any] = {"encoding": {"flood_depth": {"_FillValue": fill_value}, "risk_index": {"_FillValue": fill_value}}, "mode": mode}  # set to_netcdf_kwargs
+    to_netcdf_kwargs: Dict[str, Any] = {
+        "encoding": {
+            "flood_depth": {"_FillValue": fill_value},
+            "risk_index": {"_FillValue": fill_value},
+            "flood_depth_max": {"_FillValue": fill_value},
+        },
+        "mode": mode,
+    }  # set to_netcdf_kwargs
     if mode == "a":  # check condition mode == "a":
         to_netcdf_kwargs["unlimited_dims"] = ("time",)  # execute statement
     ds.to_netcdf(out_path, **to_netcdf_kwargs)  # execute statement
