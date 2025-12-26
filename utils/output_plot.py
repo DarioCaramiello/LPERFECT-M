@@ -91,7 +91,7 @@ def _mask_fill_and_nan(da: xr.DataArray) -> xr.DataArray:
 def _format_time_value(value: Any) -> str:
     """Return an ISO-8601-like representation for a time coordinate value."""
     if isinstance(value, np.datetime64):
-        return np.datetime_as_string(value, unit="s")
+        return np.datetime_as_string(value, unit="auto")
     if isinstance(value, datetime):
         return value.isoformat()
     if hasattr(value, "isoformat"):
@@ -110,6 +110,14 @@ def _log_dataset_metadata(ds: xr.Dataset, name: str) -> None:
     for attr in ("title", "institution"):
         if attr in ds.attrs and ds.attrs[attr]:
             LOG.info("%s %s: %s", name, attr, ds.attrs[attr])
+
+
+def _clean_attr_value(value: Any) -> Optional[str]:
+    """Strip and return attribute text if present and non-empty."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
 
 
 def _percentile_vmax(data: np.ndarray, p: float) -> float:
@@ -389,6 +397,8 @@ def main() -> int:
     LOG.info("Opening flood dataset: %s", args.flood)
     flood_ds = xr.open_dataset(args.flood)
     _log_dataset_metadata(flood_ds, "Flood dataset")
+    flood_title_attr = _clean_attr_value(flood_ds.attrs.get("title"))
+    flood_institution_attr = _clean_attr_value(flood_ds.attrs.get("institution"))
 
     LOG.info("Opening domain dataset: %s", args.domain)
     domain_ds = xr.open_dataset(args.domain)
@@ -438,14 +448,18 @@ def main() -> int:
     time_dim = "time" if "time" in flood_var.dims else None
 
     time_coord_values = flood_ds[time_dim].values if time_dim else None
+    cli_title = _clean_attr_value(args.title)
 
     def make_title(ti: int) -> str:
-        if args.title:
-            return args.title
-        if time_dim and time_coord_values is not None:
-            time_label = _format_time_value(time_coord_values[ti])
-            return f"LPERFECT flood depth – {time_label}"
-        return f"LPERFECT flood depth – time index {ti}" if time_dim else "LPERFECT flood depth"
+        time_label = _format_time_value(time_coord_values[ti]) if time_dim and time_coord_values is not None else None
+        base_title = cli_title or flood_title_attr or "LPERFECT flood depth"
+        title_parts = [base_title]
+        if time_dim:
+            title_parts.append(time_label or f"time index {ti}")
+        title_line = " – ".join(title_parts)
+        if flood_institution_attr:
+            return f"{title_line}\n{flood_institution_attr}"
+        return title_line
 
     time_size = int(flood_ds.sizes.get(time_dim, 1)) if time_dim else 1
 
