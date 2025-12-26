@@ -19,9 +19,10 @@ Project website: https://www.hiwefai-project.org
 - Running nested domains (e.g., 90 m national + 30 m regional + 10 m city) via multi-domain configs is supported while keeping the same heterogeneous parallelization schema.
 - Some remarks about the LPERFECT parallelization schema for MPI and GPU [`link`](docs/parallelization_schema.md)
 - Detailed guide to preparing **domain** and **rainfall forcing** NetCDF inputs (with GDAL/CDO/NCO examples and Italy-oriented datasets) [link](docs/data.md)
-- Step-by-step real-world walkthrough: **Italy, December 23rd 2025 intense rain event** [`link`](docs/use_case_01.md)
-- Step-by-step real-world walkthrough: **Italy, March 14th 2025 severe rainfall event** [`link`](docs/use_case_02.md)
-- Step-by-step real-world walkthrough: **Campania Region, September 23rd 2025 severe rainfall event** [`link`](docs/use_case_03.md)
+- Step-by-step real-world walkthrough:
+  - **Italy, December 23rd 2025 intense rain event** [`link`](docs/use_case_01.md)
+  - **Italy, March 14th 2025 severe rainfall event** [`link`](docs/use_case_02.md)
+  - **Campania Region, September 23rd 2025 severe rainfall event** [`link`](docs/use_case_03.md)
 - Utilities:
   - Making the model domain quick and easy [`link`](docs/make_domain.md)
   - Converting a VMI radar image to rain rate stored in a NetCDF file [`link`](docs/wr_to_rain.md)
