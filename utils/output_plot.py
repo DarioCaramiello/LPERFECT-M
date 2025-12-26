@@ -253,7 +253,7 @@ def plot_one(
 
     extent = [float(lon.min()), float(lon.max()), float(lat.min()), float(lat.max())]
 
-    fig, ax = plt.subplots(figsize=(10, 8))
+    fig, ax = plt.subplots(figsize=(10, 8), constrained_layout=True)
     ax.imshow(shade, extent=extent, origin="lower")
     ax.set_xlim(extent[0], extent[1])
     ax.set_ylim(extent[2], extent[3])
@@ -299,7 +299,6 @@ def plot_one(
     ax.set_title(title)
     ax.set_xlabel("Longitude")
     ax.set_ylabel("Latitude")
-    plt.tight_layout()
 
     if out_png:
         Path(out_png).parent.mkdir(parents=True, exist_ok=True)
