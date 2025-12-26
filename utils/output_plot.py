@@ -42,7 +42,7 @@ LOG = logging.getLogger("plot_flood_depth")
 # -----------------------------
 
 def _to_float(x: Any) -> Optional[float]:
-    \"\"\"Convert a scalar to float, returning None on failure.\"\"\"
+    """Convert a scalar to float, returning None on failure."""
     try:
         if x is None:
             return None
@@ -52,7 +52,7 @@ def _to_float(x: Any) -> Optional[float]:
 
 
 def _is_monotonic_1d(a: np.ndarray) -> bool:
-    \"\"\"True if 1D array is strictly increasing or strictly decreasing.\"\"\"
+    """True if 1D array is strictly increasing or strictly decreasing."""
     if a.ndim != 1 or a.size < 2:
         return False
     d = np.diff(a.astype(float))
@@ -60,7 +60,7 @@ def _is_monotonic_1d(a: np.ndarray) -> bool:
 
 
 def _infer_coord_name(ds: xr.Dataset, candidates: List[str]) -> Optional[str]:
-    \"\"\"Return the first candidate that exists as a coord or variable in ds.\"\"\"
+    """Return the first candidate that exists as a coord or variable in ds."""
     for c in candidates:
         if c in ds.coords or c in ds.variables:
             return c
@@ -68,7 +68,7 @@ def _infer_coord_name(ds: xr.Dataset, candidates: List[str]) -> Optional[str]:
 
 
 def _get_fill_value(da: xr.DataArray) -> Optional[float]:
-    \"\"\"Read _FillValue / missing_value from attributes if present.\"\"\"
+    """Read _FillValue / missing_value from attributes if present."""
     for k in ("_FillValue", "missing_value"):
         if k in da.attrs:
             v = _to_float(da.attrs.get(k))
@@ -78,7 +78,7 @@ def _get_fill_value(da: xr.DataArray) -> Optional[float]:
 
 
 def _mask_fill_and_nan(da: xr.DataArray) -> xr.DataArray:
-    \"\"\"Replace FillValue with NaN and ensure float dtype.\"\"\"
+    """Replace FillValue with NaN and ensure float dtype."""
     out = da.astype(float)
     fill = _get_fill_value(out)
     if fill is not None:
@@ -87,7 +87,7 @@ def _mask_fill_and_nan(da: xr.DataArray) -> xr.DataArray:
 
 
 def _percentile_vmax(data: np.ndarray, p: float) -> float:
-    \"\"\"Compute percentile-based vmax on finite values.\"\"\"
+    """Compute percentile-based vmax on finite values."""
     flat = data[np.isfinite(data)]
     if flat.size == 0:
         return 0.0
@@ -95,7 +95,7 @@ def _percentile_vmax(data: np.ndarray, p: float) -> float:
 
 
 def _pick_var(ds: xr.Dataset, preferred: str, fallback: List[str]) -> xr.DataArray:
-    \"\"\"Pick preferred variable, else fallback list, else raise.\"\"\"
+    """Pick preferred variable, else fallback list, else raise."""
     if preferred in ds.variables:
         return ds[preferred]
     for n in fallback:
@@ -118,7 +118,7 @@ def maybe_regrid_to_match(
     dem_lon: str,
     mode: str,
 ) -> Tuple[xr.DataArray, xr.DataArray]:
-    \"\"\"Optionally interpolate flood or DEM to match the other grid.\"\"\"
+    """Optionally interpolate flood or DEM to match the other grid."""
     if mode == "none":
         return flood_da, dem_da
 
@@ -142,7 +142,7 @@ def maybe_regrid_to_match(
 # -----------------------------
 
 def load_vectors(path: str):
-    \"\"\"Load GeoJSON/Shapefile using geopandas (optional dependency).\"\"\"
+    """Load GeoJSON/Shapefile using geopandas (optional dependency)."""
     try:
         import geopandas as gpd  # type: ignore
     except Exception as e:
@@ -180,7 +180,7 @@ def plot_one(
     vector_alpha: float,
     dpi: int,
 ) -> None:
-    \"\"\"Render one map: DEM hillshade + flood overlay.\"\"\"
+    """Render one map: DEM hillshade + flood overlay."""
     flood = _mask_fill_and_nan(flood_da)
     dem = _mask_fill_and_nan(dem_da)
 

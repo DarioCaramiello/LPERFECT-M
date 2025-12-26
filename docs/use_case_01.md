@@ -22,9 +22,12 @@ https://data.meteo.uniparthenope.it/instruments/rdr0/YYYY/MM/DD/rdr0_d01_YYYYMMD
 For the 12:00–18:00 UTC window on 2025-12-23 the timestamps span 12:00 through 17:50 (36 files). Download them in chronological order:
 ```bash
 base_url="https://data.meteo.uniparthenope.it/instruments/rdr0/2025/12/23"
-for hhmm in $(seq -w 1200 10 1750); do
-  url="${base_url}/rdr0_d01_20251223Z${hhmm}_VMI.tiff"
-  wget -q --show-progress -O "data/radar/20251223/${hhmm}.tiff" "$url"
+for hh in {12..17}; do
+  for mm in 00 10 20 30 40 50; do
+    hhmm="${hh}${mm}"
+    url="${base_url}/rdr0_d01_20251223Z${hhmm}_VMI.tiff"
+    wget -q --show-progress -O "data/radar/20251223/${hhmm}.tiff" "$url"
+  done
 done
 ```
 
@@ -32,7 +35,7 @@ done
 Use the provided utility to stack the 10-minute GeoTIFFs into a CF-compliant rainfall forcing aligned to `data/domain.nc`.
 ```bash
 python utils/wr_to_rainrate.py \
-  --input $(printf "data/radar/20251223/%04d.tiff," $(seq -w 1200 10 1750) | sed 's/,$//') \
+  --input $(for hh in {12..17}; do for mm in 00 10 20 30 40 50; do printf "data/radar/20251223/%02d%s.tiff," "$hh" "$mm"; done; done | sed 's/,$//') \
   --output data/20251223Z1200_radar.nc \
   --time 2025-12-23T12:00:00Z \
   --dt 600 \
@@ -163,53 +166,14 @@ Outputs:
 - `data/20251223Z1200_restart_state.nc` containing the restart state saved every 120 steps.
 
 ## 7. Visualize flood depth with the DEM as basemap
-The snippet below overlays the first flood-depth snapshot on the DEM. It uses hillshading for quick context; adjust the timestamp or color scales as needed.
-```python
-import matplotlib.pyplot as plt
-import xarray as xr
-from matplotlib.colors import LightSource
-
-# Paths from the configuration
-flood_path = "data/20251223Z1200_flood_depth.nc"
-domain_path = "data/domain.nc"
-
-flood = xr.open_dataset(flood_path)
-domain = xr.open_dataset(domain_path)
-
-# Select the first time slice (change index as needed)
-flood_da = flood["flood_depth"].isel(time=0)
-dem = domain["dem"]
-
-ls = LightSource(azdeg=315, altdeg=45)
-shade = ls.shade(dem, cmap="Greys", blend_mode="overlay", vert_exag=1)
-
-fig, ax = plt.subplots(figsize=(10, 8))
-extent = [
-    float(dem.longitude.min()),
-    float(dem.longitude.max()),
-    float(dem.latitude.min()),
-    float(dem.latitude.max()),
-]
-ax.imshow(
-    shade,
-    extent=extent,
-    origin="lower",
-)
-cs = ax.pcolormesh(
-    flood_da.longitude,
-    flood_da.latitude,
-    flood_da,
-    cmap="Blues",
-    shading="auto",
-    alpha=0.7,
-    vmin=0,
-)
-cbar = fig.colorbar(cs, ax=ax, label="Flood depth (m)")
-ax.set_title("LPERFECT flood depth – 2025-12-23 12:00 UTC")
-ax.set_xlabel("Longitude")
-ax.set_ylabel("Latitude")
-plt.tight_layout()
-plt.show()
+Use the bundled plotting utility to overlay flood depth on a DEM hillshade. The example below renders the first time step to a PNG; omit `--out` to open an interactive window.
+```bash
+python utils/output_plot.py \
+  --flood data/20251223Z1200_flood_depth.nc \
+  --domain data/domain.nc \
+  --time-index 0 \
+  --out data/20251223Z1200_flood_depth.png \
+  --title "LPERFECT flood depth – 2025-12-23 12:00 UTC"
 ```
 
 ## 8. Recap
