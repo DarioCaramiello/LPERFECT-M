@@ -175,6 +175,11 @@ def main() -> None:
         cfg["model"].setdefault("travel_time_auto", {})["min_s"] = args.travel_time_min
     if args.travel_time_max is not None:
         cfg["model"].setdefault("travel_time_auto", {})["max_s"] = args.travel_time_max
+    metrics_cfg = cfg.setdefault("metrics", {}).setdefault("parallelization", {})
+    if args.parallel_metrics:
+        metrics_cfg["enabled"] = True
+    if args.parallel_metrics_output is not None:
+        metrics_cfg["output"] = args.parallel_metrics_output
 
     # Normalize domains (support single domain object or list under cfg['domains']).
     default_domain_cfg = cfg.get("domain", {})

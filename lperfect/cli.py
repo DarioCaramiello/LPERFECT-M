@@ -51,5 +51,15 @@ def parse_args() -> argparse.Namespace:  # define function parse_args
         type=float,
         help="Maximum hop travel time (s) when using --travel-time-mode auto.",
     )  # execute statement
+    ap.add_argument(
+        "--parallel-metrics",
+        action="store_true",
+        help="Enable parallelization evaluation metrics (overrides metrics.parallelization.enabled).",
+    )  # execute statement
+    ap.add_argument(
+        "--parallel-metrics-output",
+        default=None,
+        help="Optional JSON file to write GPT-friendly parallelization metrics.",
+    )  # execute statement
     # Return parsed args.
     return ap.parse_args()  # return ap.parse_args()

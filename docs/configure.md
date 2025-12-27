@@ -33,6 +33,8 @@ Run `python main.py --help` to see the available flags. The CLI currently offers
 | `--travel-time-min` | `None` | Minimum hop time (s) when `--travel-time-mode auto`. | `python main.py --travel-time-mode auto --travel-time-min 0.5` |
 | `--travel-time-max` | `None` | Maximum hop time (s) when `--travel-time-mode auto`. | `python main.py --travel-time-mode auto --travel-time-max 900` |
 | `--outflow-geojson` | `None` | GeoJSON path for logging sea/lake outflow hit points. Overrides `output.outflow_geojson`. | `python main.py --outflow-geojson outputs/outflow.geojson` |
+| `--parallel-metrics` | `False` | Enable parallelization metrics collection. Overrides `metrics.parallelization.enabled`. | `python main.py --parallel-metrics` |
+| `--parallel-metrics-output` | `None` | Path to write GPT-friendly metrics JSON. Overrides `metrics.parallelization.output`. | `python main.py --parallel-metrics --parallel-metrics-output runs/metrics.json` |
 
 > Tip: You can combine the CLI and JSON file. For example, keep a stable `config.json`
 > and vary only the output path with `--out-nc` for batch runs.
@@ -157,6 +159,30 @@ Common keys for each domain object:
 > Note: The provided CDL templates use `latitude`/`longitude` coordinate names. If you
 > follow those templates, set `varmap.x = "longitude"` and
 > `varmap.y = "latitude"` (or rename the coordinates in your NetCDF).
+
+### `metrics.parallelization`
+
+Controls optional metrics that capture wall-clock timings, throughput, and migration ratios for MPI + threading + GPU runs. These metrics are formatted to be GPT-friendly for downstream optimization workflows.
+
+| Key | Default | Description |
+| --- | --- | --- |
+| `enabled` | `false` | Turn on metrics collection. |
+| `output` | `null` | Path to write the metrics JSON. When `null`, the JSON is logged only. |
+| `max_samples` | `256` | Maximum per-step samples to retain; larger runs are down-sampled evenly. |
+
+Example:
+
+```json
+{
+  "metrics": {
+    "parallelization": {
+      "enabled": true,
+      "output": "runs/parallel_metrics.json",
+      "max_samples": 128
+    }
+  }
+}
+```
 
 **Single-domain example:**
 

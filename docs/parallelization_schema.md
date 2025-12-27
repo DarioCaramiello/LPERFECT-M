@@ -124,3 +124,24 @@ Measurement notes:
 - Particle throughput is derived from the `hops` counter divided by wall-clock runtime; it captures the combined effect of threading and vectorization within each rank.
 - Migration ratio is computed as `(migrated / total active particles) * 100` per step and helps identify decomposition changes before scaling to many nodes.
 - If `compute.shared_memory.enabled=true`, ensure `workers` matches the cores allocated by the launcher (e.g., `SLURM_CPUS_PER_TASK`) to reproduce the speedups above.
+
+### How LPERFECT now computes and exports metrics
+
+LPERFECT can emit a GPT-friendly JSON report with per-step and summary metrics that work across:
+
+- **Shared memory:** per-step throughput and wall times reflect thread usage and chunking inside each rank.
+- **Distributed memory:** migration ratios and per-step wall times use the MPI max across ranks to capture the slowest slab.
+- **GPU + CPU hybrids:** runoff timings isolate the GPU-heavy CN computation, while advection/migration timings stay CPU-side.
+
+Enable the report via either `--parallel-metrics` (CLI) or `metrics.parallelization.enabled=true` (JSON). Optional fields:
+
+- `metrics.parallelization.output`: path to write the JSON (also logged on rank 0).
+- `metrics.parallelization.max_samples`: cap on per-step samples; large runs are evenly down-sampled.
+
+The JSON contains:
+
+- `scenario`: ranks, shared-memory settings, device, domain shape, timestep.
+- `summary`: wall-clock totals and quantiles, particle throughput, migration ratios, segment timings (runoff/advect/migration), spawned/outflow particle counts.
+- `per_step_samples`: sampled steps with wall time, segment breakdown, hops, throughput, and migration ratios.
+
+This structure is stable and designed for downstream agents to ingest directly for automated performance tuning across CPU, GPU, and MPI configurations.

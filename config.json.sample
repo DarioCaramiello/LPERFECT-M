@@ -98,5 +98,12 @@
   },
   "compute": {
     "device": "cpu"
+  },
+  "metrics": {
+    "parallelization": {
+      "enabled": false,
+      "output": null,
+      "max_samples": 256
+    }
   }
 }
