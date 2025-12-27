@@ -116,6 +116,13 @@ def default_config() -> Dict[str, Any]:  # define function default_config
                 "chunk_size": 65536,  # execute statement
             },  # execute statement
         },  # execute statement
+        "metrics": {
+            "parallelization": {
+                "enabled": False,
+                "output": None,
+                "max_samples": 256,
+            }
+        },
     }  # execute statement
 
 

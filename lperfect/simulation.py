@@ -6,6 +6,7 @@
 # Import typing primitives.
 from typing import Any, Dict, Iterable, List, Optional  # import typing import Any, Dict, Iterable, List, Optional
 from collections import Counter, defaultdict  # import collections import Counter, defaultdict
+from time import perf_counter  # import time import perf_counter
 # Import dataclasses.
 from dataclasses import dataclass  # import dataclasses import dataclass
 
@@ -43,6 +44,7 @@ from .mpi_utils import (  # import .mpi_utils import (
     gather_particles_to_rank0,  # execute statement
     scatter_particles_from_rank0,  # execute statement
     migrate_particles_slab,  # execute statement
+    rank_of_row,  # execute statement
 )  # execute statement
 
 # Import Domain class.
@@ -90,6 +92,11 @@ def run_simulation(
             shared_cfg.chunk_size,
             shared_cfg.min_particles_per_worker,
         )  # execute statement
+
+    metrics_cfg = cfg.get("metrics", {}).get("parallelization", {}) if isinstance(cfg.get("metrics", {}), dict) else {}
+    metrics_enabled = bool(metrics_cfg.get("enabled", False))
+    metrics_output = metrics_cfg.get("output", None)
+    metrics_max_samples = int(metrics_cfg.get("max_samples", 256) or 0)
 
     # Start time for time-aware rain selection and output timestamps.
     start_time = parse_iso8601_to_datetime64(mcfg.get("start_time", None))  # set start_time
@@ -553,6 +560,11 @@ def run_simulation(
     # ------------------------------
     # Main time loop
     # ------------------------------
+    run_wall_start = perf_counter()
+    step_wall_samples: list[float] = []
+    step_migration_ratio: list[float] = []
+    step_hops_throughput: list[float] = []
+    sampled_steps: list[dict[str, Any]] = []
     if elapsed_s0 > T_s + 1e-9:  # check condition elapsed_s0 > T_s + 1e-9:
         raise ValueError(f"Restart elapsed_s={elapsed_s0} exceeds total T_s={T_s}.")  # raise ValueError(f"Restart elapsed_s={elapsed_s0} exceeds total T_s={T_s}.")
 
@@ -562,7 +574,15 @@ def run_simulation(
     if rank == 0:  # check condition rank == 0:
         logger.info("LPERFECT start: T_s=%.1f dt_s=%.1f steps=%d ranks=%d", T_s, dt_s, steps, size)  # execute statement
 
+    sample_stride = max(1, int(np.ceil(steps / metrics_max_samples))) if (metrics_enabled and metrics_max_samples > 0) else 1
+
     for k in range(steps):  # loop over k in range(steps):
+        step_t0 = perf_counter()
+        runoff_t = 0.0
+        advection_t = 0.0
+        migration_t = 0.0
+        active_particles_before_migration = int(particles.r.size)
+        migrated_particles_global = 0
         # Elapsed time at end of step.
         step_time_s = elapsed_s0 + min((k + 1) * dt_s, remaining_s)  # set step_time_s
 
@@ -600,10 +620,12 @@ def run_simulation(
 
         # Compute cumulative runoff with CN and incremental runoff for this step.
         CN_slab = dom.cn[r0:r1, :]  # set CN_slab
+        runoff_t0 = perf_counter()
         Q_cum_slab_full = scs_cn_cumulative_runoff_mm(P_slab, CN_slab, ia_ratio=ia_ratio, device=device)  # set Q_cum_slab
         Q_cum_slab = Q_cum_slab_full.astype(np.float32)  # set Q_cum_slab
         dQ_mm = np.maximum(Q_cum_slab - Q_slab, 0.0)  # set dQ_mm
         Q_slab = Q_cum_slab  # set Q_slab
+        runoff_t = perf_counter() - runoff_t0
 
         # Convert incremental runoff to meters.
         runoff_depth_m = dQ_mm / 1000.0  # set runoff_depth_m
@@ -622,6 +644,7 @@ def run_simulation(
         total_spawned_particles += new_particles
 
         # Advect particles.
+        advect_t0 = perf_counter()
         particles, outflow_vol_local, nhops_local, outflow_points_local, outflow_particles_local = advect_particles_one_step(  # set particles, outflow_vol_local, nhops_local, outflow_points_local, outflow_particles_local
             particles=particles,  # set particles
             valid=valid,  # set valid
@@ -636,10 +659,18 @@ def run_simulation(
             track_outflow_points=record_outflow_points,  # set track_outflow_points
             return_outflow_particles=True,  # set return_outflow_particles
         )  # execute statement
+        advection_t = perf_counter() - advect_t0
 
         # Migrate particles between slabs (MPI).
         if size > 1:  # check condition size > 1:
+            if metrics_enabled:
+                active_particles_before_migration = int(comm.allreduce(active_particles_before_migration, op=MPI.SUM))
+                dest = rank_of_row(particles.r, nrows, size)
+                migrated_local = int(np.sum(dest != rank))
+                migrated_particles_global = int(comm.allreduce(migrated_local, op=MPI.SUM))
+            mig_t0 = perf_counter()
             particles = migrate_particles_slab(comm, particles, nrows=nrows)  # set particles
+            migration_t = perf_counter() - mig_t0
 
         # Compute current system volume (sum of particle volumes).
         system_vol_local = float(particles.vol.sum())  # set system_vol_local
@@ -676,6 +707,46 @@ def run_simulation(
         if record_outflow_points and outflow_points_local:
             interval_idx = _interval_index(step_time_s)
             outflow_interval_counts[interval_idx].update(outflow_points_local)
+
+        if metrics_enabled:
+            step_duration_local = perf_counter() - step_t0
+            step_duration = step_duration_local
+            if size > 1:
+                step_duration = float(comm.allreduce(step_duration_local, op=MPI.MAX))
+            step_wall_samples.append(step_duration)
+            if size > 1:
+                migration_ratio_pct = (
+                    float(migrated_particles_global) / float(active_particles_before_migration + 1e-9) * 100.0
+                    if active_particles_before_migration > 0
+                    else 0.0
+                )
+            else:
+                migration_ratio_pct = 0.0
+            step_migration_ratio.append(migration_ratio_pct)
+            throughput = float(nhops) / max(step_duration, 1e-9)
+            step_hops_throughput.append(throughput)
+
+            if metrics_max_samples <= 0 or (k % sample_stride == 0):
+                sampled_steps.append(
+                    {
+                        "step": int(k + 1),
+                        "sim_time_s": float(step_time_s),
+                        "wall_clock_s": float(step_duration),
+                        "segments": {
+                            "runoff_spawn_s": float(runoff_t),
+                            "advection_s": float(advection_t),
+                            "migration_s": float(migration_t),
+                        },
+                        "particles": {
+                            "active_before_migration": int(active_particles_before_migration),
+                            "migrated": int(migrated_particles_global),
+                            "outflow": int(outflow_particle_count_global),
+                        },
+                        "hops": int(nhops),
+                        "throughput_hops_per_s": float(throughput),
+                        "migration_ratio_pct": float(migration_ratio_pct),
+                    }
+                )
 
         # Periodic diagnostics (rank0 only).
         if rank == 0 and log_every > 0 and ((k + 1) % log_every == 0 or (k + 1) == steps):  # check condition rank == 0 and log_every > 0 and ((k + 1) % log_every == 0 or (k + 1) == steps):
@@ -777,6 +848,22 @@ def run_simulation(
         else:
             merged_interval_counts = outflow_interval_counts
 
+    if metrics_enabled:
+        total_wall_local = perf_counter() - run_wall_start
+        total_wall = total_wall_local
+        if size > 1:
+            total_wall = float(comm.allreduce(total_wall_local, op=MPI.MAX))
+
+        wall_arr = np.asarray(step_wall_samples, dtype=np.float64) if step_wall_samples else np.asarray([0.0])
+        mig_arr = np.asarray(step_migration_ratio, dtype=np.float64) if step_migration_ratio else np.asarray([0.0])
+
+        seg_runoff = float(np.sum([sample["segments"]["runoff_spawn_s"] for sample in sampled_steps]))
+        seg_advect = float(np.sum([sample["segments"]["advection_s"] for sample in sampled_steps]))
+        seg_mig = float(np.sum([sample["segments"]["migration_s"] for sample in sampled_steps]))
+        if size > 1:
+            seg_runoff = float(comm.allreduce(seg_runoff, op=MPI.MAX))
+            seg_advect = float(comm.allreduce(seg_advect, op=MPI.MAX))
+            seg_mig = float(comm.allreduce(seg_mig, op=MPI.MAX))
     if rank == 0:
         report = _build_quality_report(
             final_elapsed_s=final_elapsed_s,
@@ -794,3 +881,48 @@ def run_simulation(
         _log_quality_report(report)
         if record_outflow_points:
             _write_outflow_geojson(merged_interval_counts, final_elapsed_s)
+        if metrics_enabled:
+            metrics_report = {
+                "scenario": {
+                    "domain": domain_label,
+                    "shape_rc": [int(nrows), int(ncols)],
+                    "ranks": int(size),
+                    "shared_memory": {
+                        "enabled": bool(shared_cfg.enabled),
+                        "workers": int(shared_cfg.workers),
+                        "chunk_size": int(shared_cfg.chunk_size),
+                        "min_particles_per_worker": int(shared_cfg.min_particles_per_worker),
+                    },
+                    "device": device,
+                    "dt_s": float(dt_s),
+                    "T_s": float(T_s),
+                    "steps": int(steps),
+                },
+                "summary": {
+                    "wall_clock_s": float(total_wall),
+                    "wall_clock_per_step_mean_s": float(np.mean(wall_arr)),
+                    "wall_clock_per_step_p50_s": float(np.percentile(wall_arr, 50)),
+                    "wall_clock_per_step_p95_s": float(np.percentile(wall_arr, 95)),
+                    "particle_throughput_hops_per_s": float(total_hops / max(total_wall, 1e-9)),
+                    "migration_ratio_pct_mean": float(np.mean(mig_arr)),
+                    "migration_ratio_pct_p95": float(np.percentile(mig_arr, 95)),
+                    "gpu_runoff_time_s": float(seg_runoff),
+                    "advect_time_s": float(seg_advect),
+                    "migration_time_s": float(seg_mig),
+                    "spawned_particles": int(total_spawned_particles),
+                    "outflow_particles": int(total_outflow_particles),
+                },
+                "per_step_samples": sampled_steps,
+                "notes": [
+                    "wall_clock metrics use max across ranks when MPI is active",
+                    "throughput uses total hops divided by wall time, independent of simulation time",
+                    "migration_ratio_pct reflects particles that changed MPI rank per step",
+                    "segments are approximate and exclude synchronization overhead outside each block",
+                ],
+            }
+            logger.info("Parallelization metrics (GPT-friendly JSON): %s", json.dumps(metrics_report, indent=2))
+            if metrics_output:
+                Path(metrics_output).parent.mkdir(parents=True, exist_ok=True)
+                with open(metrics_output, "w", encoding="utf-8") as f:
+                    json.dump(metrics_report, f, indent=2)
+                logger.info("Parallelization metrics written to %s", metrics_output)
