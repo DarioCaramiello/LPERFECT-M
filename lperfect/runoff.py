@@ -59,8 +59,6 @@ def scs_cn_cumulative_runoff_mm(  # define function scs_cn_cumulative_runoff_mm
     ia_ratio: float,  # execute statement
     device: str | None = None,  # execute statement
     params: CurveNumberParams | None = None,
-    out: np.ndarray | None = None,
-    workspace: np.ndarray | None = None,
 ) -> np.ndarray:  # execute statement
     """Compute cumulative runoff Q (mm) from cumulative precipitation P (mm) using SCS-CN.
 
@@ -101,22 +99,18 @@ def scs_cn_cumulative_runoff_mm(  # define function scs_cn_cumulative_runoff_mm
     # Ensure float arrays.
     P = to_device(P_cum_mm, xp).astype(target_dtype, copy=False)  # set P
 
-    if out is not None:
-        if out.shape != P.shape:
-            raise ValueError("output array must match precipitation shape")
-        if out.dtype != target_dtype:
-            raise ValueError("output array dtype must match target dtype")
-        Q = out
-        Q.fill(0.0)
-    else:
-        Q = xp.zeros_like(P, dtype=target_dtype)  # set Q
+    # Initialize runoff to zero.
+    Q = xp.zeros_like(P, dtype=target_dtype)  # set Q
 
     ok = valid_mask & xp.isfinite(P)
     if not bool(xp.any(ok)):
         return to_numpy(Q)
 
-    # Use Q as workspace for (P - Ia) to reduce allocations.
-    xp.subtract(P, Ia, out=Q, where=ok, casting="unsafe")
+    cond = ok & (P > Ia) & (S > 0.0)
+    if bool(xp.any(cond)):
+        num = (P[cond] - Ia[cond]) ** 2
+        den = (P[cond] - Ia[cond] + S[cond])
+        Q[cond] = num / den
 
     cond = ok & (Q > 0.0) & (S > 0.0)
     if bool(xp.any(cond)):

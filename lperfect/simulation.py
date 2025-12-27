@@ -27,7 +27,7 @@ from .time_utils import datetime_to_hours_since_1900, parse_iso8601_to_datetime6
 from .d8 import build_downstream_index  # import .d8 import build_downstream_index
 from .rain import build_rain_sources, blended_rain_step_mm_rank0  # import .rain import build_rain_sources, blended_rain_step_mm_rank0
 from .runoff import precompute_scs_cn_params, scs_cn_cumulative_runoff_mm  # import .runoff import precompute_scs_cn_params, scs_cn_cumulative_runoff_mm
-from .compute_backend import get_array_module, gpu_available, normalize_device  # import .compute_backend import get_array_module, gpu_available, normalize_device
+from .compute_backend import gpu_available, normalize_device  # import .compute_backend import gpu_available, normalize_device
 from .hydraulics import spawn_particles_from_runoff_slab, advect_particles_one_step, local_volgrid_from_particles_slab  # import .hydraulics import spawn_particles_from_runoff_slab, advect_particles_one_step, local_volgrid_from_particles_slab
 from .particles import Particles, empty_particles, concat_particles  # import .particles import Particles, empty_particles, concat_particles
 from .risk import compute_flow_accum_area_m2, compute_risk_index  # import .risk import compute_flow_accum_area_m2, compute_risk_index
@@ -266,9 +266,6 @@ def run_simulation(
 
     CN_slab = dom.cn[r0:r1, :]
     cn_params = precompute_scs_cn_params(CN_slab, ia_ratio=ia_ratio, device=device)
-    cn_xp = get_array_module(device)
-    cn_out = cn_xp.zeros(P_slab.shape, dtype=cn_params.dtype)
-    cn_workspace = cn_xp.empty_like(cn_out)
 
     # ------------------------------
     # Output helpers and bookkeeping
@@ -631,7 +628,6 @@ def run_simulation(
         P_slab = P_slab + rain_slab_mm  # set P_slab
 
         # Compute cumulative runoff with CN and incremental runoff for this step.
-        prev_Q_slab = Q_slab
         runoff_t0 = perf_counter()
         Q_cum_slab_full = scs_cn_cumulative_runoff_mm(
             P_slab,
@@ -639,11 +635,9 @@ def run_simulation(
             ia_ratio=ia_ratio,
             device=device,
             params=cn_params,
-            out=cn_out,
-            workspace=cn_workspace,
         )  # set Q_cum_slab
-        Q_cum_slab = Q_cum_slab_full  # set Q_cum_slab
-        dQ_mm = np.maximum(Q_cum_slab - prev_Q_slab, 0.0)  # set dQ_mm
+        Q_cum_slab = Q_cum_slab_full.astype(np.float32)  # set Q_cum_slab
+        dQ_mm = np.maximum(Q_cum_slab - Q_slab, 0.0)  # set dQ_mm
         Q_slab = Q_cum_slab  # set Q_slab
         cn_out = prev_Q_slab  # reuse previous buffer as next output target
         runoff_t = perf_counter() - runoff_t0
