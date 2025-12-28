@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import argparse  # Parse command-line arguments for the CLI.
+import json  # Read nested-domain hierarchies from a JSON file.
+import importlib.util  # Detect optional dependencies at runtime.
+import math  # Provide ceil/floor utilities when snapping nested bounding boxes.
 from dataclasses import dataclass  # Provide a simple data container for grid metadata.
 from datetime import datetime, timezone  # Timestamp domain creation for metadata.
-import importlib.util  # Detect optional dependencies at runtime.
 from typing import Iterable, Optional  # Define type hints for optional iterables.
 
 import numpy as np  # Numerical arrays and math utilities.
@@ -19,6 +21,15 @@ class GridSpec:
     latitude_name: str  # Name of the y-coordinate dimension.
     x: np.ndarray  # 1D coordinate array for x.
     y: np.ndarray  # 1D coordinate array for y.
+
+
+@dataclass
+class NestedDomainSpec:
+    name: str  # Unique name for this nested domain.
+    parent: str  # Parent domain name (root by default).
+    bbox: tuple[float, float, float, float]  # Bounding box for this domain.
+    refinement: float  # Refinement factor versus the parent domain resolution.
+    output: str  # Output NetCDF path for this nested domain.
 
 
 D8_CODES = np.array([1, 2, 4, 8, 16, 32, 64, 128], dtype=np.int32)  # ESRI D8 codes.
@@ -74,6 +85,17 @@ def _grid_from_da(da: xr.DataArray, longitude_name: str, latitude_name: str) -> 
     y = np.asarray(da[latitude_name].values)
     # Return a GridSpec for consistent grid metadata handling.
     return GridSpec(longitude_name=longitude_name, latitude_name=latitude_name, x=x, y=y)
+
+
+def _grid_spacing(grid: GridSpec) -> tuple[float, float]:
+    # Compute grid spacing along each axis (median handles small floating drift).
+    if grid.x.size < 2 or grid.y.size < 2:
+        raise ValueError("Grid must have at least two points per axis to compute resolution")
+    dx = float(np.median(np.abs(np.diff(grid.x))))
+    dy = float(np.median(np.abs(np.diff(grid.y))))
+    if dx <= 0 or dy <= 0:
+        raise ValueError("Grid spacing must be positive")
+    return dx, dy
 
 
 def _apply_bbox(da: xr.DataArray, grid: GridSpec, bbox: Optional[Iterable[float]]) -> xr.DataArray:
@@ -225,6 +247,87 @@ def _compute_d8(dem: np.ndarray, dx: float, dy: float) -> np.ndarray:
     return d8  # Return the completed D8 grid.
 
 
+def _snap_bbox_to_parent(bbox: Iterable[float], parent: GridSpec) -> tuple[float, float, float, float]:
+    # Convert the bounding box into explicit floats for math and validation.
+    xmin, ymin, xmax, ymax = (float(v) for v in bbox)
+    # Guard against inverted bounding boxes up front.
+    if xmin >= xmax or ymin >= ymax:
+        raise ValueError("Bounding box must follow min < max ordering.")
+    # Gather parent grid limits to keep children strictly inside.
+    pxmin, pxmax = float(np.min(parent.x)), float(np.max(parent.x))
+    pymin, pymax = float(np.min(parent.y)), float(np.max(parent.y))
+    # Snap requested extents to the nearest parent grid lines without stepping outside.
+    dx_parent, dy_parent = _grid_spacing(parent)
+    snapped_xmin = pxmin + dx_parent * math.ceil((xmin - pxmin) / dx_parent)
+    snapped_xmax = pxmin + dx_parent * math.floor((xmax - pxmin) / dx_parent)
+    snapped_ymin = pymin + dy_parent * math.ceil((ymin - pymin) / dy_parent)
+    snapped_ymax = pymin + dy_parent * math.floor((ymax - pymin) / dy_parent)
+    # Validate that snapping did not collapse the bounding box.
+    if snapped_xmin >= snapped_xmax or snapped_ymin >= snapped_ymax:
+        raise ValueError("Snapped bounding box is empty; check requested extents.")
+    # Return the aligned bounding box to the caller.
+    return snapped_xmin, snapped_ymin, snapped_xmax, snapped_ymax
+
+
+def _assert_bbox_within_parent(bbox: tuple[float, float, float, float], parent: GridSpec) -> None:
+    # Retrieve the true spatial limits of the parent domain.
+    pxmin, pxmax = float(np.min(parent.x)), float(np.max(parent.x))
+    pymin, pymax = float(np.min(parent.y)), float(np.max(parent.y))
+    xmin, ymin, xmax, ymax = bbox  # Unpack for readability.
+    # Apply a tiny tolerance to absorb floating-point jitter.
+    tol = 1e-9
+    # Raise descriptive errors when nesting violates containment.
+    if xmin < pxmin - tol or xmax > pxmax + tol:
+        raise ValueError("Nested domain longitude bounds must lie inside the parent domain.")
+    if ymin < pymin - tol or ymax > pymax + tol:
+        raise ValueError("Nested domain latitude bounds must lie inside the parent domain.")
+
+
+def _load_nested_config(config_path: Optional[str], root_name: str) -> list[NestedDomainSpec]:
+    # Skip parsing when the user did not request nested domains.
+    if config_path is None:
+        return []
+    with open(config_path, "r", encoding="utf-8") as fh:
+        payload = json.load(fh)  # Load the JSON configuration from disk.
+    # Accept either a plain list or a dict containing a domains array.
+    domain_list = payload.get("domains") if isinstance(payload, dict) else payload
+    if not isinstance(domain_list, list):
+        raise ValueError("Nested config must be a list or an object with a 'domains' array.")
+    specs: list[NestedDomainSpec] = []  # Collect parsed nested domain specs.
+    seen_names: set[str] = set()  # Track duplicate names early.
+    for idx, raw in enumerate(domain_list):
+        if not isinstance(raw, dict):
+            raise ValueError(f"Nested domain entry #{idx} must be an object.")
+        name = raw.get("name")
+        if not name:
+            raise ValueError(f"Nested domain entry #{idx} is missing a 'name'.")
+        if name == root_name:
+            raise ValueError("Nested domain name cannot match the root domain name.")
+        if name in seen_names:
+            raise ValueError(f"Duplicate nested domain name '{name}' encountered.")
+        parent = raw.get("parent", root_name)  # Default parent is the root domain.
+        bbox = raw.get("bbox")
+        if not bbox or len(bbox) != 4:
+            raise ValueError(f"Nested domain '{name}' must provide a four-value 'bbox'.")
+        refinement = float(raw.get("refinement", 1.0))
+        if refinement <= 1.0:
+            raise ValueError(f"Nested domain '{name}' must set a refinement > 1 (finer than its parent).")
+        output = raw.get("output")
+        if not output:
+            raise ValueError(f"Nested domain '{name}' must specify an 'output' path.")
+        specs.append(
+            NestedDomainSpec(
+                name=name,
+                parent=str(parent),
+                bbox=tuple(float(v) for v in bbox),
+                refinement=refinement,
+                output=str(output),
+            )
+        )
+        seen_names.add(name)  # Update the set to guard against duplicates.
+    return specs  # Hand the validated nested specs back to the caller.
+
+
 def build_domain(
     dem_path: str,
     output_path: str,
@@ -239,7 +342,7 @@ def build_domain(
     latitude_name: str,
     bbox: Optional[Iterable[float]],
     resolution: Optional[Iterable[float]],
-) -> None:
+) -> GridSpec:
     # Count progress steps so the bar reflects optional inputs.
     total_steps = 4  # DEM load, bbox, resolution, grid prep.
     total_steps += 1  # D8 step (load or compute).
@@ -263,8 +366,7 @@ def build_domain(
 
         progress.set_description("Preparing grid")
         grid = _grid_from_da(dem_da, longitude_name, latitude_name)
-        dx = float(np.median(np.abs(np.diff(grid.x))))
-        dy = float(np.median(np.abs(np.diff(grid.y))))
+        dx, dy = _grid_spacing(grid)
         progress.update(1)
 
         progress.set_description("Preparing D8")
@@ -411,6 +513,71 @@ def build_domain(
         dem_ds.close()
         progress.update(1)
 
+    # Return the grid spec so nested domains can build upon this layout.
+    return grid
+
+
+def build_nested_hierarchy(
+    nested_config: Optional[str],
+    root_name: str,
+    root_grid: GridSpec,
+    dem_path: str,
+    cn_path: Optional[str],
+    d8_path: Optional[str],
+    mask_path: Optional[str],
+    dem_var: str,
+    cn_var: str,
+    d8_var: str,
+    mask_var: str,
+    longitude_name: str,
+    latitude_name: str,
+) -> None:
+    # Parse nested-domain requests (early exit when none are provided).
+    nested_specs = _load_nested_config(nested_config, root_name=root_name)
+    if not nested_specs:
+        return
+    # Track computed grids so we can daisy-chain child resolutions and nesting checks.
+    built_grids: dict[str, GridSpec] = {root_name: root_grid}
+    pending = list(nested_specs)  # Work list of nested domains waiting on parents.
+    # Resolve nested domains level-by-level to honor parent-child relationships.
+    while pending:
+        built_this_round = False  # Flag progress to detect impossible parent references.
+        for spec in list(pending):
+            parent_grid = built_grids.get(spec.parent)
+            if parent_grid is None:
+                continue  # Parent not ready yet; try again in the next pass.
+            # Derive the child resolution from the parent and requested refinement.
+            dx_parent, dy_parent = _grid_spacing(parent_grid)
+            child_resolution = (dx_parent / spec.refinement, dy_parent / spec.refinement)
+            # Align the requested bbox to parent grid lines and enforce containment.
+            snapped_bbox = _snap_bbox_to_parent(spec.bbox, parent_grid)
+            _assert_bbox_within_parent(snapped_bbox, parent_grid)
+            # Build the nested domain using the same inputs but tighter bounds / finer grid.
+            child_grid = build_domain(
+                dem_path=dem_path,
+                output_path=spec.output,
+                cn_path=cn_path,
+                d8_path=d8_path,
+                mask_path=mask_path,
+                dem_var=dem_var,
+                cn_var=cn_var,
+                d8_var=d8_var,
+                mask_var=mask_var,
+                longitude_name=longitude_name,
+                latitude_name=latitude_name,
+                bbox=snapped_bbox,
+                resolution=child_resolution,
+            )
+            built_grids[spec.name] = child_grid  # Cache for deeper children or siblings.
+            pending.remove(spec)  # Mark this spec as completed.
+            built_this_round = True  # Record that progress was made.
+        if not built_this_round:
+            missing_parents = sorted({spec.parent for spec in pending if spec.parent not in built_grids})
+            raise ValueError(
+                "Nested domain dependencies could not be resolved. "
+                f"Missing parents: {', '.join(missing_parents)}"
+            )
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)  # CLI parser with module docstring.
@@ -424,6 +591,7 @@ def main() -> None:
     parser.add_argument("--mask-var", default="channel_mask", help="Mask variable name")
     parser.add_argument("--longitude-name", default="longitude", help="Longitude coordinate name")
     parser.add_argument("--latitude-name", default="latitude", help="Latitude coordinate name")
+    parser.add_argument("--domain-name", default="root", help="Name for the root domain (used when nesting).")
     parser.add_argument("--bbox", nargs=4, type=float, metavar=("min_lon", "min_lat", "max_lon", "max_lat"))
     parser.add_argument(
         "--resolution",
@@ -432,10 +600,18 @@ def main() -> None:
         metavar=("DX", "DY"),
         help="Target resolution (dx [dy]) in degrees or meters",
     )
+    parser.add_argument(
+        "--nested-config",
+        help=(
+            "JSON file describing nested domains. "
+            "Each entry must include name, bbox, refinement (>1), output, and optional parent name."
+        ),
+    )
     parser.add_argument("--output", required=True, help="Output NetCDF path")
     args = parser.parse_args()  # Parse CLI arguments.
 
-    build_domain(
+    # Build the mandatory root domain first.
+    root_grid = build_domain(
         dem_path=args.dem,
         output_path=args.output,
         cn_path=args.cn,
@@ -449,6 +625,22 @@ def main() -> None:
         latitude_name=args.latitude_name,
         bbox=args.bbox,
         resolution=args.resolution,
+    )
+    # Optionally cascade into nested domains using the same inputs.
+    build_nested_hierarchy(
+        nested_config=args.nested_config,
+        root_name=args.domain_name,
+        root_grid=root_grid,
+        dem_path=args.dem,
+        cn_path=args.cn,
+        d8_path=args.d8,
+        mask_path=args.mask,
+        dem_var=args.dem_var,
+        cn_var=args.cn_var,
+        d8_var=args.d8_var,
+        mask_var=args.mask_var,
+        longitude_name=args.longitude_name,
+        latitude_name=args.latitude_name,
     )
 
 

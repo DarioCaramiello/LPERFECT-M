@@ -5,10 +5,10 @@ from existing rasters/NetCDF inputs. It can crop to a bounding box, resample to 
 requested resolution, and compute D8 flow directions directly from the DEM when
 no D8 input is provided.
 
-Run the utility multiple times to prepare **nested domains** (e.g., 90 m national, 30 m regional,
-10 m city) and list them under the `domains` array in `config.json`. Each domain will be simulated
-independently with consistent hydrological/numerical settings and the same MPI/shared-memory
-parallelization layout.
+Run the utility multiple times (or via a single `--nested-config` hierarchy) to prepare **nested domains**
+(e.g., 90 m national, 30 m regional, 10 m city) and list them under the `domains` array in `config.json`.
+Each domain will be simulated independently with consistent hydrological/numerical settings and the same
+MPI/shared-memory parallelization layout.
 
 ---
 
@@ -69,8 +69,10 @@ python utils/make_domain.py \
 - `--mask-var`: Mask variable name (default: `channel_mask`).
 - `--longitude-name`: Longitude coordinate name (default: `longitude`).
 - `--latitude-name`: Latitude coordinate name (default: `latitude`).
+- `--domain-name`: Label for the root domain (default: `root`); useful when referring to parents in nested configs.
 - `--bbox`: Bounding box `min_lon min_lat max_lon max_lat`.
 - `--resolution`: Target resolution `dx [dy]` (single value applies to both).
+- `--nested-config`: JSON file describing nested domains (name, bbox, refinement > 1, output, optional parent).
 - `--output` **(required)**: Output NetCDF path.
 
 ---
@@ -111,6 +113,42 @@ python utils/make_domain.py \
   --mask channel_mask.tif \
   --output domain.nc
 ```
+
+### 4.5 Build a nested hierarchy in one run
+Create a JSON file listing nested domains, each with a bounding box, a refinement factor (child resolution = parent resolution ÷ refinement), and an optional parent. The root domain is always built from the CLI arguments.
+
+```json
+{
+  "domains": [
+    {
+      "name": "regional_30m",
+      "parent": "root",
+      "bbox": [12.0, 45.0, 12.6, 45.6],
+      "refinement": 3,
+      "output": "domain_30m.nc"
+    },
+    {
+      "name": "city_10m",
+      "parent": "regional_30m",
+      "bbox": [12.2, 45.1, 12.4, 45.3],
+      "refinement": 3,
+      "output": "domain_10m.nc"
+    }
+  ]
+}
+```
+
+```bash
+python utils/make_domain.py \
+  --dem dem.nc \
+  --bbox 11.0 44.5 13.0 46.0 \
+  --resolution 90 \
+  --nested-config nested_domains.json \
+  --domain-name root \
+  --output domain_90m.nc
+```
+
+Nested bounding boxes are snapped to parent grid lines and validated to stay inside the parent domain so particles can enter/exit nested grids cleanly.
 
 ---
 
