@@ -134,10 +134,14 @@ def run_simulation(
             shared_cfg.min_particles_per_worker,
         )  # execute statement
 
-    metrics_cfg = cfg.get("metrics", {}).get("parallelization", {}) if isinstance(cfg.get("metrics", {}), dict) else {}
-    metrics_enabled = bool(metrics_cfg.get("enabled", False))
-    metrics_output = metrics_cfg.get("output", None)
-    metrics_max_samples = int(metrics_cfg.get("max_samples", 256) or 0)
+    metrics_root = cfg.get("metrics", {}) if isinstance(cfg.get("metrics", {}), dict) else {}  # set metrics_root
+    metrics_cfg = metrics_root.get("parallelization", {}) if isinstance(metrics_root, dict) else {}  # set metrics_cfg
+    metrics_enabled = bool(metrics_cfg.get("enabled", False))  # set metrics_enabled
+    metrics_output = metrics_cfg.get("output", None)  # set metrics_output
+    metrics_max_samples = int(metrics_cfg.get("max_samples", 256) or 0)  # set metrics_max_samples
+    assistant_cfg = metrics_root.get("assistant", {}) if isinstance(metrics_root, dict) else {}  # set assistant_cfg
+    assistant_metrics_enabled = bool(assistant_cfg.get("enabled", False))  # set assistant_metrics_enabled
+    assistant_metrics_output = assistant_cfg.get("output", None)  # set assistant_metrics_output
     balance_cfg = compute_cfg.get("mpi", {}).get("balance", {}) if isinstance(compute_cfg.get("mpi", {}), dict) else {}
     balance_every_steps = int(balance_cfg.get("every_steps", 0) or 0)
     balance_every_sim_s = float(balance_cfg.get("every_sim_s", 0.0) or 0.0)
@@ -996,12 +1000,12 @@ def run_simulation(
         else:
             merged_interval_counts = outflow_interval_counts
 
-    if metrics_enabled:
-        total_wall_local = perf_counter() - run_wall_start
-        total_wall = total_wall_local
-        if size > 1:
-            total_wall = float(comm.allreduce(total_wall_local, op=MPI.MAX))
+    total_wall_local = perf_counter() - run_wall_start  # set total_wall_local
+    total_wall = total_wall_local  # set total_wall
+    if (metrics_enabled or assistant_metrics_enabled) and size > 1:  # check condition (metrics_enabled or assistant_metrics_enabled) and size > 1:
+        total_wall = float(comm.allreduce(total_wall_local, op=MPI.MAX))  # set total_wall
 
+    if metrics_enabled:
         wall_arr = np.asarray(step_wall_samples, dtype=np.float64) if step_wall_samples else np.asarray([0.0])
         mig_arr = np.asarray(step_migration_ratio, dtype=np.float64) if step_migration_ratio else np.asarray([0.0])
 
@@ -1083,3 +1087,90 @@ def run_simulation(
                 with open(metrics_output, "w", encoding="utf-8") as f:
                     json.dump(metrics_report, f, indent=2)
                 logger.info("Parallelization metrics written to %s", metrics_output)
+        if assistant_metrics_enabled:
+            active_cells = int(np.count_nonzero(dom.active_mask))  # set active_cells
+            total_cells = int(dom.active_mask.size)  # set total_cells
+            if np.isscalar(dom.cell_area_m2):  # check condition np.isscalar(dom.cell_area_m2):
+                cell_area_summary = {  # set cell_area_summary
+                    "mode": "scalar",  # execute statement
+                    "value_m2": float(dom.cell_area_m2),  # execute statement
+                }  # execute statement
+            else:  # fallback branch
+                area = np.asarray(dom.cell_area_m2, dtype=np.float64)  # set area
+                active_area = area[dom.active_mask] if area.shape == dom.active_mask.shape else area  # set active_area
+                active_area = active_area[np.isfinite(active_area)]  # set active_area
+                cell_area_summary = {  # set cell_area_summary
+                    "mode": "grid",  # execute statement
+                    "min_m2": float(np.nanmin(active_area)) if active_area.size else float("nan"),  # execute statement
+                    "mean_m2": float(np.nanmean(active_area)) if active_area.size else float("nan"),  # execute statement
+                    "max_m2": float(np.nanmax(active_area)) if active_area.size else float("nan"),  # execute statement
+                }  # execute statement
+            travel_time_summary: dict[str, Any]  # set travel_time_summary type
+            if np.isscalar(travel_time_s):  # check condition np.isscalar(travel_time_s):
+                travel_time_summary = {  # set travel_time_summary
+                    "mode": travel_time_mode,  # execute statement
+                    "hillslope_s": float(travel_time_s),  # execute statement
+                    "channel_s": float(travel_time_channel_s),  # execute statement
+                }  # execute statement
+            else:  # fallback branch
+                hillslope_vals = travel_time_s[valid]  # set hillslope_vals
+                channel_vals = travel_time_channel_s[valid]  # set channel_vals
+                hillslope_safe = hillslope_vals if hillslope_vals.size else np.asarray([np.nan], dtype=np.float32)  # set hillslope_safe
+                channel_safe = channel_vals if channel_vals.size else np.asarray([np.nan], dtype=np.float32)  # set channel_safe
+                travel_time_summary = {  # set travel_time_summary
+                    "mode": travel_time_mode,  # execute statement
+                    "hillslope_median_s": float(np.nanmedian(hillslope_safe)),  # execute statement
+                    "channel_median_s": float(np.nanmedian(channel_safe)),  # execute statement
+                    "hillslope_bounds_s": [float(np.nanmin(hillslope_safe)), float(np.nanmax(hillslope_safe))],  # execute statement
+                    "channel_bounds_s": [float(np.nanmin(channel_safe)), float(np.nanmax(channel_safe))],  # execute statement
+                }  # execute statement
+            hyd_bal = report["volume_balance"]  # set hyd_bal
+            hyd_status = report["hydrology"]  # set hyd_status
+            assistant_report = {  # set assistant_report
+                "domain": {  # execute statement
+                    "name": domain_label,  # execute statement
+                    "shape_rc": [int(nrows), int(ncols)],  # execute statement
+                    "active_cells": active_cells,  # execute statement
+                    "total_cells": total_cells,  # execute statement
+                    "cell_area_m2": cell_area_summary,  # execute statement
+                },  # execute statement
+                "time": {  # execute statement
+                    "start_time": str(mcfg.get("start_time", "")),  # execute statement
+                    "dt_s": float(dt_s),  # execute statement
+                    "simulation_window_s": float(T_s),  # execute statement
+                    "steps_executed": int(steps),  # execute statement
+                    "elapsed_wall_clock_s": float(total_wall),  # execute statement
+                },  # execute statement
+                "compute": {  # execute statement
+                    "device": device,  # execute statement
+                    "mpi_enabled": bool(mpi_active),  # execute statement
+                    "mpi_ranks": int(size),  # execute statement
+                    "mpi_world_size": int(world_size),  # execute statement
+                    "shared_memory_workers": int(shared_cfg.workers),  # execute statement
+                    "travel_time": travel_time_summary,  # execute statement
+                    "particle_volume_m3": float(particle_vol_m3),  # execute statement
+                },  # execute statement
+                "hydrology": {  # execute statement
+                    "initial_abstraction_ratio": float(ia_ratio),  # execute statement
+                    "outflow_sink_enabled": bool(outflow_sink),  # execute statement
+                    "rain_m3": hyd_bal["rain_m3"],  # execute statement
+                    "runoff_m3": hyd_bal["runoff_m3"],  # execute statement
+                    "outflow_m3": hyd_bal["outflow_m3"],  # execute statement
+                    "stored_m3": hyd_bal["stored_m3"],  # execute statement
+                    "runoff_to_rain_ratio": hyd_status["runoff_to_rain_ratio"],  # execute statement
+                    "mass_error_m3": hyd_bal["final_mass_error_m3"],  # execute statement
+                    "mass_error_pct_of_runoff": hyd_bal["mass_error_pct_of_runoff"],  # execute statement
+                    "hydrology_ok": bool(hyd_status["hydrology_ok"]),  # execute statement
+                },  # execute statement
+                "status": report["status"],  # execute statement
+                "notes": [  # execute statement
+                    "GPT-friendly summary for AI-assisted review of computational and hydrological behavior.",  # execute statement
+                    "Travel-time statistics are derived from active cells when automatic mode is used.",  # execute statement
+                ],  # execute statement
+            }  # execute statement
+            logger.info("AI assistant metrics (GPT-friendly JSON): %s", json.dumps(assistant_report, indent=2))
+            if assistant_metrics_output:
+                Path(assistant_metrics_output).parent.mkdir(parents=True, exist_ok=True)
+                with open(assistant_metrics_output, "w", encoding="utf-8") as f:
+                    json.dump(assistant_report, f, indent=2)
+                logger.info("AI assistant metrics written to %s", assistant_metrics_output)

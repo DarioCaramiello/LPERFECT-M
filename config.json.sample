@@ -122,6 +122,10 @@
       "enabled": false,
       "output": null,
       "max_samples": 256
+    },
+    "assistant": {
+      "enabled": false,
+      "output": null
     }
   }
 }

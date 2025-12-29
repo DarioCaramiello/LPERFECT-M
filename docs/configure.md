@@ -35,6 +35,8 @@ Run `python main.py --help` to see the available flags. The CLI currently offers
 | `--outflow-geojson` | `None` | GeoJSON path for logging sea/lake outflow hit points. Overrides `output.outflow_geojson`. | `python main.py --outflow-geojson outputs/outflow.geojson` |
 | `--parallel-metrics` | `False` | Enable parallelization metrics collection. Overrides `metrics.parallelization.enabled`. | `python main.py --parallel-metrics` |
 | `--parallel-metrics-output` | `None` | Path to write GPT-friendly metrics JSON. Overrides `metrics.parallelization.output`. | `python main.py --parallel-metrics --parallel-metrics-output runs/metrics.json` |
+| `--ai-metrics` | `False` | Enable GPT-ready hydrology + compute metrics. Overrides `metrics.assistant.enabled`. | `python main.py --ai-metrics` |
+| `--ai-metrics-output` | `None` | Path to write hydrology + compute metrics JSON. Overrides `metrics.assistant.output`. | `python main.py --ai-metrics --ai-metrics-output runs/ai_metrics.json` |
 
 > Tip: You can combine the CLI and JSON file. For example, keep a stable `config.json`
 > and vary only the output path with `--out-nc` for batch runs.
@@ -179,6 +181,28 @@ Example:
       "enabled": true,
       "output": "runs/parallel_metrics.json",
       "max_samples": 128
+    }
+  }
+}
+```
+
+### `metrics.assistant`
+
+Produces a compact GPT-friendly JSON report with computational settings and hydrological outcomes so you can ask an AI to summarize run quality, diagnose issues, or propose tuning ideas. See `docs/ai.md` for end-to-end usage examples.
+
+| Key | Default | Description |
+| --- | --- | --- |
+| `enabled` | `false` | Turn on AI-assistant metrics. |
+| `output` | `null` | Path to write the metrics JSON. When `null`, the JSON is logged only. |
+
+Example:
+
+```json
+{
+  "metrics": {
+    "assistant": {
+      "enabled": true,
+      "output": "runs/hydrology_compute_metrics.json"
     }
   }
 }
