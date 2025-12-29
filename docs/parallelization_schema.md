@@ -182,6 +182,8 @@ Enable the report via either `--parallel-metrics` (CLI) or `metrics.parallelizat
 - `metrics.parallelization.output`: path to write the JSON (also logged on rank 0).
 - `metrics.parallelization.max_samples`: cap on per-step samples; large runs are evenly down-sampled.
 
+For AI summaries that focus on hydrology and compute settings (rather than step-by-step timing), enable `metrics.assistant` or the `--ai-metrics` CLI flag to emit a compact JSON status report (documented in `docs/ai.md`).
+
 The JSON contains:
 
 - `scenario`: ranks, shared-memory settings, device, domain shape, timestep.

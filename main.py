@@ -178,11 +178,17 @@ def main() -> None:
         cfg["model"].setdefault("travel_time_auto", {})["min_s"] = args.travel_time_min
     if args.travel_time_max is not None:
         cfg["model"].setdefault("travel_time_auto", {})["max_s"] = args.travel_time_max
-    metrics_cfg = cfg.setdefault("metrics", {}).setdefault("parallelization", {})
+    metrics_root = cfg.setdefault("metrics", {})
+    metrics_parallel_cfg = metrics_root.setdefault("parallelization", {})
     if args.parallel_metrics:
-        metrics_cfg["enabled"] = True
+        metrics_parallel_cfg["enabled"] = True
     if args.parallel_metrics_output is not None:
-        metrics_cfg["output"] = args.parallel_metrics_output
+        metrics_parallel_cfg["output"] = args.parallel_metrics_output
+    metrics_assistant_cfg = metrics_root.setdefault("assistant", {})
+    if args.ai_metrics:
+        metrics_assistant_cfg["enabled"] = True
+    if args.ai_metrics_output is not None:
+        metrics_assistant_cfg["output"] = args.ai_metrics_output
 
     # Resolve MPI preferences and initialize communicator after config parsing.
     world_size_guess = MPI.COMM_WORLD.Get_size() if HAVE_MPI else 1

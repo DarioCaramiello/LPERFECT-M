@@ -79,5 +79,15 @@ def parse_args() -> argparse.Namespace:  # define function parse_args
         default=None,
         help="Optional JSON file to write GPT-friendly parallelization metrics.",
     )  # execute statement
+    ap.add_argument(
+        "--ai-metrics",
+        action="store_true",
+        help="Enable GPT-friendly hydrology + compute metrics (overrides metrics.assistant.enabled).",
+    )  # execute statement
+    ap.add_argument(
+        "--ai-metrics-output",
+        default=None,
+        help="Optional JSON file for AI-assistant hydrology + compute metrics.",
+    )  # execute statement
     # Return parsed args.
     return ap.parse_args()  # return ap.parse_args()

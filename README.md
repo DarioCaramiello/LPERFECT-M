@@ -19,6 +19,7 @@ Project website: https://www.hiwefai-project.org
 - Running nested domains (e.g., 90 m national + 30 m regional + 10 m city) via multi-domain configs is supported while keeping the same heterogeneous parallelization schema.
 - Some remarks about the LPERFECT parallelization schema for MPI and GPU [`link`](docs/parallelization_schema.md)
 - Detailed guide to preparing **domain** and **rainfall forcing** NetCDF inputs (with GDAL/CDO/NCO examples and Italy-oriented datasets) [link](docs/data.md)
+- How to use GPT-friendly metrics JSON outputs with AI assistants [`link`](docs/ai.md)
 - Step-by-step real-world walkthrough:
   - **Italy, December 23rd 2025 intense rain event** [`link`](docs/use_case_01.md)
   - **Italy, March 14th 2025 severe rainfall event** [`link`](docs/use_case_02.md)
