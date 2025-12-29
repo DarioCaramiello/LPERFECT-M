@@ -971,11 +971,21 @@ def run_simulation(
             interval_idx = _interval_index(step_time_s)
             outflow_interval_counts[interval_idx].update(outflow_points_local)
 
+        # Capture the wall-clock duration for this step (max across ranks when MPI is active).
+        step_duration_local = perf_counter() - step_t0  # set step_duration_local
+        step_duration = step_duration_local  # set step_duration
+        if size > 1:  # check condition size > 1:
+            step_duration = float(comm.allreduce(step_duration_local, op=MPI.MAX))  # set step_duration
+
+        # Track how many particles are currently active across all ranks.
+        active_particles_local_now = int(particles.r.size)  # set active_particles_local_now
+        active_particles_global = active_particles_local_now  # set active_particles_global
+        if size > 1:  # check condition size > 1:
+            active_particles_global = int(comm.allreduce(active_particles_local_now, op=MPI.SUM))  # set active_particles_global
+
+        particles_per_second = float(active_particles_global) / max(step_duration, 1e-9)  # set particles_per_second
+
         if metrics_enabled:
-            step_duration_local = perf_counter() - step_t0
-            step_duration = step_duration_local
-            if size > 1:
-                step_duration = float(comm.allreduce(step_duration_local, op=MPI.MAX))
             step_wall_samples.append(step_duration)
             if size > 1:
                 migration_ratio_pct = (
@@ -1014,8 +1024,17 @@ def run_simulation(
         # Periodic diagnostics (rank0 only).
         if rank == 0 and log_every > 0 and ((k + 1) % log_every == 0 or (k + 1) == steps):  # check condition rank == 0 and log_every > 0 and ((k + 1) % log_every == 0 or (k + 1) == steps):
             logger.info(  # execute statement
-                "mass_balance step=%d time_s=%.1f rain_m3=%.3e runoff_m3=%.3e outflow_m3=%.3e system_m3=%.3e err_m3=%.3e hops=%d",  # execute statement
-                (k + 1), step_time_s, rain_vol_step, runoff_vol_step, outflow_vol_step, system_vol, mass_error, nhops  # execute statement
+                "mass_balance step=%d time_s=%.1f rain_m3=%.3e runoff_m3=%.3e outflow_m3=%.3e system_m3=%.3e err_m3=%.3e hops=%d active_particles=%d particles_per_s=%.1f",  # execute statement
+                (k + 1),
+                step_time_s,
+                rain_vol_step,
+                runoff_vol_step,
+                outflow_vol_step,
+                system_vol,
+                mass_error,
+                nhops,
+                active_particles_global,
+                particles_per_second,
             )  # execute statement
 
         # Restart writing if enabled.
