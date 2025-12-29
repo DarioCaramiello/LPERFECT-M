@@ -222,13 +222,12 @@ def main() -> None:
 
     # Resolve MPI preferences and initialize communicator after config parsing.
     world_size_guess = MPI.COMM_WORLD.Get_size() if HAVE_MPI else 1
-    mpi_cfg = MPIConfig.from_dict(cfg.get("compute", {}).get("mpi", {}), world_size=world_size_guess)
-    # Persist resolved MPI preferences back into the config for downstream visibility.
-    cfg.setdefault("compute", {})["mpi"] = {
-        "enabled": mpi_cfg.enabled,
-        "decomposition": mpi_cfg.decomposition,
-        "min_rows_per_rank": mpi_cfg.min_rows_per_rank,
-    }
+    mpi_cfg_root = cfg.setdefault("compute", {}).setdefault("mpi", {})
+    mpi_cfg = MPIConfig.from_dict(mpi_cfg_root, world_size=world_size_guess)
+    # Persist resolved MPI preferences back into the config while preserving nested options (e.g., balance).
+    mpi_cfg_root["enabled"] = mpi_cfg.enabled
+    mpi_cfg_root["decomposition"] = mpi_cfg.decomposition
+    mpi_cfg_root["min_rows_per_rank"] = mpi_cfg.min_rows_per_rank
     comm, rank, size, mpi_world_size, mpi_active = initialize_mpi(mpi_cfg)
 
     # Configure logging (include rank so MPI logs are distinguishable).
