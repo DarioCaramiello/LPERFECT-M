@@ -279,6 +279,25 @@ def main() -> None:
                 parent_label,
             )
 
+            # Log the parallelization strategy for clarity before the run begins.
+            compute_cfg = run_cfg.get("compute", {}) if isinstance(run_cfg.get("compute", {}), dict) else {}
+            parallel_cfg = compute_cfg.get("parallelization", {}) if isinstance(compute_cfg.get("parallelization", {}), dict) else {}
+            parallel_schema = str(parallel_cfg.get("schema", "slab") or "slab").lower().strip()
+            parallel_io = str(parallel_cfg.get("io", "rank0") or "rank0").lower().strip()
+            logger.info(
+                "Parallelization schema=%s with io_mode=%s (rank0_only=%s)",
+                parallel_schema,
+                parallel_io,
+                str(parallel_io == "rank0"),
+            )
+            mpi_cfg_log = compute_cfg.get("mpi", {}) if isinstance(compute_cfg.get("mpi", {}), dict) else {}
+            logger.info(
+                "MPI config: enabled=%s, decomposition=%s, min_rows_per_rank=%s",
+                str(mpi_cfg_log.get("enabled", False)),
+                mpi_cfg_log.get("decomposition", "block"),
+                str(mpi_cfg_log.get("min_rows_per_rank", 1)),
+            )
+
         # Run the main simulation driver with the loaded configuration and domain.
         run_simulation(comm, rank, size, run_cfg, dom, domain_label=domain_label, mpi_world_size=mpi_world_size)
 
